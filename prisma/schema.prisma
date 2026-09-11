@@ -1,0 +1,305 @@
+// Pocket Studio data model.
+// Vectors/transforms are stored as Json ([x, y, z]) so the 3D layer can evolve
+// without a migration for every new cinematography parameter.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  name      String?
+  createdAt DateTime  @default(now())
+  projects  Project[]
+}
+
+model Project {
+  id        String   @id @default(cuid())
+  title     String
+  format    String   @default("SHORT_FILM")
+  mood      String   @default("NATURALISTIC")
+  genre     String?
+  logline   String?
+  status    String   @default("IN_PROGRESS")
+  isDemo    Boolean  @default(false)
+  script    String   @default("")
+  thumbnail String?
+
+  challengeSlug String?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  scenes     Scene[]
+  cast       Character[]
+  timeline   TimelineItem[]
+  audio      AudioAsset[]
+  versions   ProjectVersion[]
+
+  @@index([userId])
+}
+
+/// A scene is one continuous piece of staging: an environment, a cast on the
+/// floor, lights, cameras, and the shots captured from them.
+/// Alternate directorial takes are Scenes with `parentSceneId` set.
+model Scene {
+  id             String  @id @default(cuid())
+  index          Int
+  name           String
+  location       String  @default("")
+  timeOfDay      String  @default("DAY")
+  environmentId  String  @default("apartment")
+  lightingPreset String  @default("WARM_INTERIOR")
+  versionLabel   String  @default("Original")
+  notes          String  @default("")
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  parentSceneId String?
+  parentScene   Scene?  @relation("SceneVersions", fields: [parentSceneId], references: [id], onDelete: Cascade)
+  versions      Scene[] @relation("SceneVersions")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  characters     SceneCharacter[]
+  props          SceneProp[]
+  lights         Light[]
+  cameras        Camera[]
+  shots          Shot[]
+  blockingEvents BlockingEvent[]
+
+  @@index([projectId])
+}
+
+/// Project-level cast member — the "actor" the director casts into scenes.
+model Character {
+  id           String @id @default(cuid())
+  name         String
+  definitionId String
+  accentColor  String @default("#c9a227")
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  placements SceneCharacter[]
+
+  @@index([projectId])
+}
+
+/// Placement of a cast member inside one scene (blocking start state).
+model SceneCharacter {
+  id        String @id @default(cuid())
+  position  Json
+  rotation  Json
+  scale     Float  @default(1)
+  animation String @default("IDLE")
+  locked    Boolean @default(false)
+
+  sceneId String
+  scene   Scene  @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  blockingEvents BlockingEvent[]
+
+  @@index([sceneId])
+}
+
+model SceneProp {
+  id           String @id @default(cuid())
+  name         String
+  definitionId String
+  position     Json
+  rotation     Json
+  scale        Float  @default(1)
+
+  sceneId String
+  scene   Scene  @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+
+  @@index([sceneId])
+}
+
+model Light {
+  id          String  @id @default(cuid())
+  role        String
+  enabled     Boolean @default(true)
+  intensity   Float   @default(1)
+  position    Json
+  rotation    Json
+  color       String  @default("#ffffff")
+  temperature Int     @default(5600)
+  size        Float   @default(1)
+
+  sceneId String
+  scene   Scene  @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+
+  @@index([sceneId])
+}
+
+model Camera {
+  id            String  @id @default(cuid())
+  name          String
+  position      Json
+  target        Json
+  focalLength   Float   @default(35)
+  aperture      Float   @default(2.8)
+  dofEnabled    Boolean @default(false)
+  focusTargetId String?
+  shotSize      String  @default("MEDIUM")
+  heightPreset  String  @default("EYE")
+  isActive      Boolean @default(false)
+
+  // Live rig movement. Copied into a CameraMovement when a shot is captured.
+  movementType      String @default("STATIC")
+  movementDuration  Float  @default(4)
+  movementIntensity Float  @default(0.5)
+
+  sceneId String
+  scene   Scene  @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+
+  shots Shot[]
+
+  @@index([sceneId])
+}
+
+/// A shot freezes a camera state. After capture it is independent from the
+/// live scene camera — editing the scene camera must never mutate a shot.
+model Shot {
+  id          String @id @default(cuid())
+  index       Int
+  name        String
+  shotSize    String
+  duration    Float  @default(4)
+  cameraState Json
+  subjects    Json
+  notes       String @default("")
+  transition  String @default("CUT")
+
+  sceneId String
+  scene   Scene  @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+
+  cameraId String?
+  camera   Camera? @relation(fields: [cameraId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  movements       CameraMovement[]
+  storyboardFrame StoryboardFrame?
+  timelineItems   TimelineItem[]
+
+  @@index([sceneId])
+}
+
+model CameraMovement {
+  id             String @id @default(cuid())
+  type           String
+  startTime      Float  @default(0)
+  duration       Float  @default(2)
+  startTransform Json
+  endTransform   Json
+  intensity      Float  @default(0.5)
+
+  shotId String
+  shot   Shot   @relation(fields: [shotId], references: [id], onDelete: Cascade)
+
+  @@index([shotId])
+}
+
+model BlockingEvent {
+  id            String @id @default(cuid())
+  startTime     Float
+  endTime       Float
+  action        String
+  startPosition Json
+  endPosition   Json
+  rotation      Json
+
+  sceneId String
+  scene   Scene  @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+
+  sceneCharacterId String
+  sceneCharacter   SceneCharacter @relation(fields: [sceneCharacterId], references: [id], onDelete: Cascade)
+
+  @@index([sceneId])
+}
+
+model StoryboardFrame {
+  id        String   @id @default(cuid())
+  imageKey  String
+  width     Int      @default(640)
+  height    Int      @default(360)
+  createdAt DateTime @default(now())
+
+  shotId String @unique
+  shot   Shot   @relation(fields: [shotId], references: [id], onDelete: Cascade)
+}
+
+model TimelineItem {
+  id       String @id @default(cuid())
+  index    Int
+  track    String @default("VIDEO")
+  startTime Float @default(0)
+  duration Float  @default(4)
+  trimIn   Float  @default(0)
+  trimOut  Float  @default(0)
+  transition String @default("CUT")
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  shotId String?
+  shot   Shot?   @relation(fields: [shotId], references: [id], onDelete: Cascade)
+
+  audioAssetId String?
+  audioAsset   AudioAsset? @relation(fields: [audioAssetId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+}
+
+model AudioAsset {
+  id       String @id @default(cuid())
+  name     String
+  kind     String @default("SFX")
+  storageKey String
+  duration Float  @default(0)
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  timelineItems TimelineItem[]
+
+  @@index([projectId])
+}
+
+model ProjectVersion {
+  id        String   @id @default(cuid())
+  label     String
+  snapshot  Json
+  createdAt DateTime @default(now())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model Challenge {
+  id          String @id @default(cuid())
+  slug        String @unique
+  order       Int    @default(0)
+  title       String
+  prompt      String
+  constraints Json
+}
