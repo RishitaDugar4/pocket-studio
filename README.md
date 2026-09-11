@@ -36,14 +36,23 @@ there is something to direct within seconds of arriving.
 
 ## What works today
 
-Milestones 1–6 of the build plan are implemented and tested end to end: idea →
-scene → blocking → camera → shots → edit → playable previs.
+All ten milestones of the build plan are implemented and tested end to end:
+idea → script → scene → blocking → camera → shots → edit → notes → export.
 
 **The whole loop**
 - Build a set, block the actors over time, work the camera, capture shots,
   assemble them into a cut and play the film back — all in the browser.
 - The demo film ships blocked, shot and cut, so there is something to watch
   within seconds of first launch.
+
+**Script (Milestone 1 / §7)**
+- A screenplay editor with a live breakdown: sluglines become candidate scenes,
+  capitalised cues become cast, and props named in the action are matched
+  against the library.
+- `INT. APARTMENT — NIGHT` is parsed into a location, an inside/outside, and a
+  time of day — and `CONTINUOUS` inherits the time from the scene before it.
+- Nothing is created behind your back: you press Build, and the scenes appear
+  with the set, location and time already filled in.
 
 **Films and persistence**
 - Project dashboard, three-step new-film flow, Director Challenges that create a
@@ -94,17 +103,47 @@ scene → blocking → camera → shots → edit → playable previs.
 **The cut (Milestone 6)**
 - Lay the storyboard into a sequence, then reorder, trim, duplicate and delete
   clips without touching the storyboard.
-- Playback across scenes through a single WebGL context, with cut / fade /
-  dissolve. (The dissolve mixes from the outgoing shot's stored frame, so it is
-  a still rather than live footage — an approximation, and labelled as one.)
+- Playback across scenes on an A/B roll: two decks alternate, so during a
+  dissolve both shots are genuinely live — the outgoing camera keeps moving and
+  its actors keep acting while it mixes out. Cuts and fades too.
 - Audio: upload sound onto dialogue, ambience, SFX and music tracks, drag clips
   against picture, and hear them in sync when you play the cut.
+
+**"What if?" versions (Milestone 7)**
+- Try another version copies a scene whole — cast, props, lights, cameras,
+  blocking, shots — and hangs it off the original as an alternative. Every
+  internal reference is remapped, so the two can never reach into each other.
+- Compare plays the versions back to back with their decisions side by side
+  ("MCU · 50mm · Push In" against "WS · 135mm · Static"), because the difference
+  only means something in sequence.
+
+**Director's notes (Milestone 8 / §26, §28)**
+- Deterministic analysis, never an LLM and never a grade: shot pacing, a
+  coverage checklist (master / medium / close-up / reverse / insert), static
+  against moving shots, lens range, and where subjects actually land in frame.
+- Continuity warnings: crossing the line between two characters, a character who
+  never gets a close-up, and cameras standing inside an actor, under the floor
+  or outside the set.
+- Every number is measured from the project — the 180° check is literally which
+  side of a line the camera stood on.
+
+**Export (Milestone 9 / §31)**
+- Records the cut as it plays, at 720p or 1080p, as WebM.
+- Optional burned-in shot labels, timecode and a storyboard-frame corner inset;
+  audio is mixed in from the timeline. Composition guides are never exported.
+- Frames are composited through a 2D canvas rather than captured straight off
+  the WebGL one — that is what makes burned-in overlays possible, and it is the
+  seam where a server-side FFmpeg encoder would slot in later.
 
 **Lighting and composition**
 - Six lighting presets built from a key/fill/back/practical/ambient rig; every
   light is individually adjustable, with colour temperature driving colour.
 - Composition guides: thirds, centre, golden ratio, true horizon, safe areas,
   eyeline. They are DOM overlays, so they can never reach an export.
+
+**Navigation.** Overview · Script · Scenes · Storyboard · Edit · Notes · Export.
+(§6 lists six sections; Notes is a seventh, because §26's director's notes and
+§28's continuity warnings need somewhere to live.)
 
 **Keyboard**
 `Space` play/pause · `K` capture shot · `1`–`4` select/move/rotate/scale ·
@@ -113,12 +152,16 @@ undo / redo · `←` `→` step one frame · `⇧←` `⇧→` previous / next s
 
 ## What is not built yet
 
-The script editor, "what if?" scene versions, continuity and coverage analysis,
-director's notes and export. Each of those sections says so in the app and points
-back at what does work. Nothing pretends to function.
+Every section of the app now does something real. Two things are deliberately
+absent:
 
-Two smaller gaps worth naming: there is no built-in sound library (audio is
-whatever you upload), and dissolves preview as a still cross-fade.
+- **No built-in sound library.** Audio is whatever you upload. Shipping a stock
+  library means shipping someone else's copyright, so it waits on a deliberate
+  choice of licence (see below).
+- **No AI features** (Milestone 10): script → shot suggestions, the director's
+  assistant, generated voices. The spec puts these last on purpose, and the
+  deterministic analysis in Director's Notes covers the ground that does not
+  need a model.
 
 ---
 
@@ -128,14 +171,17 @@ whatever you upload), and dissolves preview as a still cross-fade.
 src/
   app/            routes + API handlers
   components/     ui · viewport · inspector · studio · timeline · storyboard ·
-                  edit · project · dashboard · challenges
-  features/       persistence (autosave) · playback · shots · shortcuts
+                  edit · script · notes · export · project · dashboard ·
+                  challenges
+  features/       persistence (autosave) · playback · shots · export · shortcuts
   stores/         project · scene · sequence · selection · viewport · camera ·
                   timeline
   lib/
     cinematography/  lens + framing + movement maths (no React, no three.js)
     animation/       blocking evaluation + the shared stage clock
     edit/            resolving a list of clips into "what is on screen now"
+    script/          screenplay parsing and scene breakdown
+    continuity/      pacing, coverage and continuity analysis
     db/              Prisma client, repository, serializers, demo seed
     storage/         object storage behind an interface (frames, audio)
     rendering/       colour helpers

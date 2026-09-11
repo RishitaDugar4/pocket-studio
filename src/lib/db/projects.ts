@@ -248,12 +248,88 @@ export async function insertScene(scene: SceneDoc): Promise<void> {
 
 export async function addScene(
   projectId: string,
-  input: { name?: string; environmentId?: string } = {},
+  input: { name?: string; environmentId?: string; location?: string; timeOfDay?: TimeOfDay } = {},
 ): Promise<SceneDoc> {
   const count = await prisma.scene.count({ where: { projectId, parentSceneId: null } });
   const scene = buildNewScene({ projectId, index: count, ...input });
   await insertScene(scene);
   return scene;
+}
+
+/**
+ * "Try another version" (§21): a complete, independent copy of a scene, hung off
+ * the original as an alternative. Every internal reference — blocking, focus
+ * targets, shot subjects — is remapped to the copy, so the two versions can
+ * never reach into each other.
+ */
+export async function duplicateScene(sceneId: string, label?: string): Promise<SceneDoc> {
+  const project = await prisma.scene.findUnique({
+    where: { id: sceneId },
+    select: { projectId: true },
+  });
+  if (!project) throw new Error("Scene not found");
+
+  const full = await getProject(project.projectId);
+  const source = full?.scenes.find((scene) => scene.id === sceneId);
+  if (!full || !source) throw new Error("Scene not found");
+
+  const rootId = source.parentSceneId ?? source.id;
+  const versionCount = full.scenes.filter((scene) => scene.parentSceneId === rootId).length;
+  const versionLabel = label ?? `Alternative ${String(versionCount + 1).padStart(2, "0")}`;
+
+  // Old id → new id, so references inside the scene keep pointing at the copy.
+  const remap = new Map<string, string>();
+  const next = (id: string, prefix: string) => {
+    const created = newId(prefix);
+    remap.set(id, created);
+    return created;
+  };
+
+  const characters = source.characters.map((character) => ({
+    ...character,
+    id: next(character.id, "sch"),
+  }));
+  const props = source.props.map((prop) => ({ ...prop, id: next(prop.id, "prp") }));
+  const lights = source.lights.map((light) => ({ ...light, id: newId("lgt") }));
+  const cameras = source.cameras.map((camera) => ({
+    ...camera,
+    id: next(camera.id, "cam"),
+    focusTargetId: camera.focusTargetId ? (remap.get(camera.focusTargetId) ?? null) : null,
+  }));
+
+  const copy: SceneDoc = {
+    ...source,
+    id: newId("scn"),
+    parentSceneId: rootId,
+    versionLabel,
+    characters,
+    props,
+    lights,
+    cameras,
+    blockingEvents: source.blockingEvents.map((event) => ({
+      ...event,
+      id: newId("blk"),
+      sceneCharacterId: remap.get(event.sceneCharacterId) ?? event.sceneCharacterId,
+    })),
+    shots: source.shots.map((shot) => ({
+      ...shot,
+      id: newId("sht"),
+      cameraId: shot.cameraId ? (remap.get(shot.cameraId) ?? null) : null,
+      subjects: shot.subjects.map((id) => remap.get(id) ?? id),
+      cameraState: {
+        ...shot.cameraState,
+        focusTargetId: shot.cameraState.focusTargetId
+          ? (remap.get(shot.cameraState.focusTargetId) ?? null)
+          : null,
+      },
+      // A copy starts with no storyboard card: it is not the same frame yet.
+      frameUrl: null,
+      movements: shot.movements.map((movement) => ({ ...movement, id: newId("mov") })),
+    })),
+  };
+
+  await insertScene(copy);
+  return copy;
 }
 
 export async function deleteScene(sceneId: string): Promise<void> {
@@ -538,6 +614,21 @@ export async function saveTimeline(
   projectId: string,
   items: TimelineItemDoc[],
 ): Promise<void> {
+  // A client can be holding a clip whose shot has since been deleted. Dropping
+  // it here is right either way, and it stops one stale tab from wedging every
+  // subsequent save on a foreign key.
+  const [shots, audio] = await Promise.all([
+    prisma.shot.findMany({ where: { scene: { projectId } }, select: { id: true } }),
+    prisma.audioAsset.findMany({ where: { projectId }, select: { id: true } }),
+  ]);
+  const liveShots = new Set(shots.map((shot) => shot.id));
+  const liveAudio = new Set(audio.map((asset) => asset.id));
+  items = items.filter(
+    (item) =>
+      (item.shotId === null || liveShots.has(item.shotId)) &&
+      (item.audioAssetId === null || liveAudio.has(item.audioAssetId)),
+  );
+
   const ids = items.map((item) => item.id);
   await prisma.$transaction([
     prisma.timelineItem.deleteMany({

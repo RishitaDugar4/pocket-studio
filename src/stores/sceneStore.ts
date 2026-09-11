@@ -578,13 +578,26 @@ export const useSceneStore = create<SceneState>((set, get) => ({
     return copy.id;
   },
 
-  removeShot: (id) =>
+  removeShot: (id) => {
+    // A shot that is in the cut takes its clips with it. Leaving them behind
+    // points the timeline at a row that no longer exists, and every later save
+    // fails on the foreign key.
+    const project = useProjectStore.getState().project;
+    if (project?.timeline.some((item) => item.shotId === id)) {
+      useProjectStore.getState().patchProject({
+        timeline: project.timeline
+          .filter((item) => item.shotId !== id)
+          .map((item, index) => (item.track === "VIDEO" ? { ...item, index } : item)),
+      });
+    }
+
     set((s) =>
       mutate(s, "Delete shot", (scene) => ({
         ...scene,
         shots: scene.shots.filter((shot) => shot.id !== id).map((shot, i) => ({ ...shot, index: i })),
       })),
-    ),
+    );
+  },
 
   reorderShots: (orderedIds) =>
     set((s) =>

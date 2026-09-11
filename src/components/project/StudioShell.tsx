@@ -17,6 +17,7 @@ const SECTIONS = [
   { segment: "scenes", label: "Scenes" },
   { segment: "storyboard", label: "Storyboard" },
   { segment: "edit", label: "Edit" },
+  { segment: "notes", label: "Notes" },
   { segment: "export", label: "Export" },
 ] as const;
 

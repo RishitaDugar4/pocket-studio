@@ -193,6 +193,55 @@ export function isCameraTooClose(camera: Vec3, subject: Vec3, subjectHeight: num
   return v.planarDistance(camera, subject) < Math.max(0.28, subjectHeight * 0.16);
 }
 
+/**
+ * Where a world point lands in the frame, as normalised coordinates:
+ * x is -1 at the left edge and +1 at the right, y likewise bottom to top.
+ * `behind` is true when the point is behind the camera, where x and y mean
+ * nothing. This is what composition analysis is measured with.
+ */
+export function projectToFrame(
+  camera: { position: Vec3; target: Vec3; focalLength: number },
+  point: Vec3,
+  aspect = 1.85,
+): { x: number; y: number; behind: boolean; distance: number } {
+  const forward = v.normalize(v.sub(camera.target, camera.position));
+  // Right-handed basis with world up; a rolled camera does not change framing.
+  const right = v.normalize([forward[2], 0, -forward[0]]);
+  const up: Vec3 = [
+    right[1] * forward[2] - right[2] * forward[1],
+    right[2] * forward[0] - right[0] * forward[2],
+    right[0] * forward[1] - right[1] * forward[0],
+  ];
+
+  const offset = v.sub(point, camera.position);
+  const depth = offset[0] * forward[0] + offset[1] * forward[1] + offset[2] * forward[2];
+  if (depth <= 0.001) return { x: 0, y: 0, behind: true, distance: Math.abs(depth) };
+
+  const lateral = offset[0] * right[0] + offset[1] * right[1] + offset[2] * right[2];
+  const vertical = offset[0] * up[0] + offset[1] * up[1] + offset[2] * up[2];
+
+  const halfV = Math.tan(degToRad(verticalFovDeg(camera.focalLength)) / 2);
+  const halfH = halfV * aspect;
+
+  return {
+    x: lateral / depth / halfH,
+    y: vertical / depth / halfV,
+    behind: false,
+    distance: depth,
+  };
+}
+
+/**
+ * Which side of the line between two subjects the camera is standing on.
+ * Crossing it between consecutive shots is the 180° rule violation (§28).
+ */
+export function sideOfLine(cameraPosition: Vec3, a: Vec3, b: Vec3): number {
+  const line: [number, number] = [b[0] - a[0], b[2] - a[2]];
+  const toCamera: [number, number] = [cameraPosition[0] - a[0], cameraPosition[2] - a[2]];
+  const cross = line[0] * toCamera[1] - line[1] * toCamera[0];
+  return Math.abs(cross) < 0.05 ? 0 : Math.sign(cross);
+}
+
 export function defaultCameraTransform(): CameraTransform {
   return {
     position: [3.2, 1.62, 3.6],

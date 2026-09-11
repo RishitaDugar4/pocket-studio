@@ -1,6 +1,6 @@
 "use client";
 
-import { grabFrame } from "@/components/viewport/captureBridge";
+import { captureBridge, grabFrame } from "@/components/viewport/captureBridge";
 import { saveNow } from "@/features/persistence/save";
 import { useProjectStore } from "@/stores/projectStore";
 import { useSceneStore } from "@/stores/sceneStore";
@@ -16,6 +16,8 @@ export async function captureShot(): Promise<string | null> {
   const project = useProjectStore.getState().project;
   const scene = useSceneStore.getState().scene;
   if (!project || !scene) return null;
+  // Nothing to capture unless the scene builder's viewport is on screen.
+  if (!captureBridge.grabbers.has("viewport")) return null;
 
   const viewport = useViewportStore.getState();
   // Capture what the camera sees, not what the director happens to be looking

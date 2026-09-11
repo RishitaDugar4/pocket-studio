@@ -39,6 +39,7 @@ export function ProjectOverview() {
     return <div className="flex flex-1 items-center justify-center slate">Loading film…</div>;
   }
 
+  const roots = project.scenes.filter((scene) => !scene.parentSceneId);
   const shots = project.scenes.reduce((n, scene) => n + scene.shots.length, 0);
   const runtime = project.scenes.reduce(
     (total, scene) => total + scene.shots.reduce((n, shot) => n + shot.duration, 0),
@@ -103,7 +104,7 @@ export function ProjectOverview() {
           <aside className="space-y-4">
             <dl className="panel divide-y divide-ink-800">
               {[
-                ["Scenes", String(project.scenes.length)],
+                ["Scenes", String(roots.length)],
                 ["Shots", String(shots)],
                 ["Runtime", `${runtime.toFixed(1)}s`],
                 ["Cast", String(project.cast.length)],
@@ -141,7 +142,7 @@ export function ProjectOverview() {
 
         <section className="mt-10">
           <h2 className="slate mb-3">Scenes</h2>
-          {project.scenes.length === 0 ? (
+          {roots.length === 0 ? (
             <div className="panel px-4 py-8 text-center">
               <p className="slate text-fog-300">No scenes yet</p>
               <p className="mt-2 text-sm text-fog-400">Every film starts with one scene.</p>
@@ -154,8 +155,9 @@ export function ProjectOverview() {
             </div>
           ) : (
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {project.scenes.map((scene) => {
+              {roots.map((scene) => {
                 const environment = getEnvironment(scene.environmentId);
+                const alternatives = project.scenes.filter((s) => s.parentSceneId === scene.id).length;
                 return (
                   <button
                     key={scene.id}
@@ -171,7 +173,9 @@ export function ProjectOverview() {
                     <span className="block px-3 py-2.5">
                       <span className="slate">
                         Scene {String(scene.index + 1).padStart(2, "0")}
-                        {scene.versionLabel !== "Original" ? ` · ${scene.versionLabel}` : ""}
+                        {alternatives > 0
+                          ? ` · ${alternatives + 1} versions`
+                          : ""}
                       </span>
                       <span className="mt-0.5 block truncate text-[13px] text-fog-100">
                         {scene.name}

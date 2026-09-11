@@ -8,6 +8,8 @@ import { Inspector } from "@/components/inspector/Inspector";
 import { SceneTimeline } from "@/components/timeline/SceneTimeline";
 import { AssetBrowser } from "@/components/studio/AssetBrowser";
 import { ShotFilmstrip } from "@/components/storyboard/ShotFilmstrip";
+import { CompareVersions } from "@/components/studio/CompareVersions";
+import { VersionBar, rootScenes, versionsOf } from "@/components/studio/VersionBar";
 import { Viewport } from "@/components/viewport/Viewport";
 import { getEnvironment } from "@/data/environments";
 import { saveNow } from "@/features/persistence/save";
@@ -27,7 +29,13 @@ export function SceneBuilder() {
   const project = useProjectStore((s) => s.project);
   const scene = useSceneStore((s) => s.scene);
   const [busy, setBusy] = useState(false);
+  const [comparing, setComparing] = useState(false);
   usePlaybackClock();
+
+  // Scene previews loop; the cutting room does not, and it turns this off.
+  useEffect(() => {
+    useTimelineStore.getState().setLoop(true);
+  }, []);
 
   // Keep the active scene id in step with what is actually loaded.
   useEffect(() => {
@@ -97,19 +105,23 @@ export function SceneBuilder() {
             Scene {String(scene.index + 1).padStart(2, "0")}
           </span>
           <span className="truncate text-[12px] text-fog-100">{scene.name}</span>
+          {scene.parentSceneId ? (
+            <span className="slate shrink-0 text-amber-film">{scene.versionLabel}</span>
+          ) : null}
           <span className="slate shrink-0">
             {environment.name} · {scene.timeOfDay.toLowerCase()}
           </span>
 
           <div className="ml-auto flex min-w-0 items-center gap-1 overflow-x-auto">
-            {project.scenes.map((item) => (
+            {rootScenes(project).map((item) => (
               <button
                 key={item.id}
                 type="button"
                 onClick={() => void switchScene(item)}
+                title={item.name}
                 className={cn(
                   "slate shrink-0 rounded border px-2 py-1 transition-colors duration-150",
-                  item.id === scene.id
+                  item.id === scene.id || item.id === (scene.parentSceneId ?? "")
                     ? "border-amber-dim bg-[#221d14] text-amber-film"
                     : "border-ink-700 text-fog-400 hover:text-fog-200",
                 )}
@@ -128,7 +140,9 @@ export function SceneBuilder() {
           </div>
         </div>
 
-        <div className="grid min-h-0 flex-1 grid-cols-[224px_minmax(0,1fr)_296px]">
+        <VersionBar scene={scene} onCompare={() => setComparing(true)} />
+
+        <div className="relative grid min-h-0 flex-1 grid-cols-[224px_minmax(0,1fr)_296px]">
           <AssetBrowser scene={scene} />
           <div className="flex min-h-0 flex-col">
             <Viewport scene={scene} />
@@ -136,6 +150,13 @@ export function SceneBuilder() {
             <SceneTimeline scene={scene} />
           </div>
           <Inspector scene={scene} />
+
+          {comparing ? (
+            <CompareVersions
+              versions={versionsOf(project, scene)}
+              onClose={() => setComparing(false)}
+            />
+          ) : null}
         </div>
       </div>
     </>

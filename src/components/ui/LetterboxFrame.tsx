@@ -12,10 +12,13 @@ import { cn } from "./cn";
 export function LetterboxFrame({
   aspect,
   className,
+  innerRef,
   children,
 }: {
   aspect: number;
   className?: string;
+  /** The framed box itself, for callers that need to read or capture it. */
+  innerRef?: React.RefObject<HTMLDivElement | null>;
   children: ReactNode;
 }) {
   const container = useRef<HTMLDivElement>(null);
@@ -40,6 +43,9 @@ export function LetterboxFrame({
   return (
     <div ref={container} className="grid h-full w-full place-items-center overflow-hidden">
       <div
+        ref={(element) => {
+          if (innerRef) innerRef.current = element;
+        }}
         className={cn("relative overflow-hidden", className)}
         style={size ? { width: size.width, height: size.height } : { opacity: 0 }}
       >
