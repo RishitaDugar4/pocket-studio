@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Shot" ADD COLUMN     "sceneTime" DOUBLE PRECISION NOT NULL DEFAULT 0;

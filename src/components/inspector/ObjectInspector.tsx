@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/Button";
 import { ChipGrid, NumberScrub, Select, Slider, Switch, TextInput } from "@/components/ui/Inputs";
 import { EmptyState, Field, Row, Section } from "@/components/ui/Panel";
 import { LIGHT_ROLE_LABELS } from "@/data/lighting";
+import { beatsFor } from "@/lib/animation";
+import { BlockingSection } from "./BlockingSection";
 import { kelvinToHex } from "@/lib/rendering/color";
 import { radToDeg, degToRad } from "@/lib/cinematography";
 import { useProjectStore } from "@/stores/projectStore";
@@ -28,7 +30,7 @@ export function ObjectInspector({ scene, selection }: { scene: SceneDoc; selecti
 
   if (selection.kind === "character") {
     const character = scene.characters.find((c) => c.id === selection.id);
-    return character ? <CharacterPanel character={character} /> : <MissingObject />;
+    return character ? <CharacterPanel scene={scene} character={character} /> : <MissingObject />;
   }
   if (selection.kind === "prop") {
     const prop = scene.props.find((p) => p.id === selection.id);
@@ -118,7 +120,13 @@ function TransformSection({
   );
 }
 
-function CharacterPanel({ character }: { character: SceneDoc["characters"][number] }) {
+function CharacterPanel({
+  scene,
+  character,
+}: {
+  scene: SceneDoc;
+  character: SceneDoc["characters"][number];
+}) {
   const updateCharacter = useSceneStore((s) => s.updateCharacter);
   const setCharacterAnimation = useSceneStore((s) => s.setCharacterAnimation);
   const removeCharacter = useSceneStore((s) => s.removeCharacter);
@@ -126,7 +134,12 @@ function CharacterPanel({ character }: { character: SceneDoc["characters"][numbe
   const clear = useSelectionStore((s) => s.clear);
   const setFramingSubject = useCameraStore((s) => s.setFramingSubject);
   const setInspectorTab = useViewportStore((s) => s.setInspectorTab);
+  const updateBeat = useSceneStore((s) => s.updateBeat);
+  const selectedBeatId = useSelectionStore((s) => s.selectedBeatId);
   const definition = getCharacterDefinition(character.definitionId);
+
+  const beats = beatsFor(scene, character.id);
+  const beat = beats.find((b) => b.id === selectedBeatId) ?? null;
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
@@ -166,16 +179,38 @@ function CharacterPanel({ character }: { character: SceneDoc["characters"][numbe
           }))}
         />
         <p className="text-[10px] leading-relaxed text-fog-400">
-          Actions are the pose vocabulary. Timed action beats arrive with blocking.
+          The pose {character.name} holds before their first blocking beat.
         </p>
       </Section>
 
+      {/* With a beat selected, the transform is where the actor ends up in that
+          beat — the same thing the gizmo edits, so the two never disagree. */}
       <TransformSection
-        position={character.position}
-        rotation={character.rotation}
+        label={beat ? "Beat destination" : beats.length > 0 ? "Placement at 0s" : "Transform"}
+        position={beat ? beat.endPosition : character.position}
+        rotation={beat ? beat.rotation : character.rotation}
         scale={character.scale}
-        onChange={(patch, transient) => updateCharacter(character.id, patch, transient)}
+        onChange={(patch, transient) => {
+          if (patch.scale !== undefined) {
+            updateCharacter(character.id, { scale: patch.scale }, transient);
+            return;
+          }
+          if (beat) {
+            updateBeat(
+              beat.id,
+              {
+                ...(patch.position ? { endPosition: patch.position } : {}),
+                ...(patch.rotation ? { rotation: patch.rotation } : {}),
+              },
+              transient,
+            );
+          } else {
+            updateCharacter(character.id, patch, transient);
+          }
+        }}
       />
+
+      <BlockingSection scene={scene} character={character} />
 
       <Section title="Directing">
         <Button

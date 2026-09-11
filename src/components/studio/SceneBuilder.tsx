@@ -5,11 +5,13 @@ import { Button } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
 import { EmptyState } from "@/components/ui/Panel";
 import { Inspector } from "@/components/inspector/Inspector";
-import { MovementTimeline } from "@/components/timeline/MovementTimeline";
+import { SceneTimeline } from "@/components/timeline/SceneTimeline";
 import { AssetBrowser } from "@/components/studio/AssetBrowser";
+import { ShotFilmstrip } from "@/components/storyboard/ShotFilmstrip";
 import { Viewport } from "@/components/viewport/Viewport";
 import { getEnvironment } from "@/data/environments";
 import { saveNow } from "@/features/persistence/save";
+import { usePlaybackClock } from "@/features/playback/usePlaybackClock";
 import { useProjectStore } from "@/stores/projectStore";
 import { useSceneStore } from "@/stores/sceneStore";
 import { useSelectionStore } from "@/stores/selectionStore";
@@ -25,6 +27,7 @@ export function SceneBuilder() {
   const project = useProjectStore((s) => s.project);
   const scene = useSceneStore((s) => s.scene);
   const [busy, setBusy] = useState(false);
+  usePlaybackClock();
 
   // Keep the active scene id in step with what is actually loaded.
   useEffect(() => {
@@ -129,7 +132,8 @@ export function SceneBuilder() {
           <AssetBrowser scene={scene} />
           <div className="flex min-h-0 flex-col">
             <Viewport scene={scene} />
-            <MovementTimeline scene={scene} />
+            <ShotFilmstrip scene={scene} />
+            <SceneTimeline scene={scene} />
           </div>
           <Inspector scene={scene} />
         </div>

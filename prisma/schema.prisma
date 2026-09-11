@@ -182,6 +182,8 @@ model Shot {
   name        String
   shotSize    String
   duration    Float  @default(4)
+  /// Scene time this shot starts at, so a shot can cover a later beat.
+  sceneTime   Float  @default(0)
   cameraState Json
   subjects    Json
   notes       String @default("")

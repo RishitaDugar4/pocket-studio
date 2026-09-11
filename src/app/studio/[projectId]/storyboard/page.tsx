@@ -1,14 +1,10 @@
-import { MilestonePlaceholder } from "@/components/project/MilestonePlaceholder";
+import { Suspense } from "react";
+import { Storyboard } from "@/components/storyboard/Storyboard";
 
-export default async function StoryboardPage({ params }: { params: Promise<{ projectId: string }> }) {
-  const { projectId } = await params;
+export default function StoryboardPage() {
   return (
-    <MilestonePlaceholder
-      milestone="Not built yet"
-      title="Storyboard"
-      body="Shot capture and the storyboard come after blocking. Today you can frame shots live in the Scene Builder — lens, height, shot size, movement and focus are all working."
-      nextHref={`/studio/${projectId}/scenes`}
-      nextLabel="Open Scene Builder →"
-    />
+    <Suspense fallback={<div className="flex flex-1 items-center justify-center slate">Loading…</div>}>
+      <Storyboard />
+    </Suspense>
   );
 }

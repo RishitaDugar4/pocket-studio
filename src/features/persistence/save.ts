@@ -27,6 +27,12 @@ export async function saveNow(): Promise<void> {
       }),
     });
 
+    await fetch(`/api/projects/${project.id}/timeline`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ items: project.timeline }),
+    });
+
     if (scene) {
       const response = await fetch(`/api/projects/${project.id}/scenes/${scene.id}`, {
         method: "PUT",

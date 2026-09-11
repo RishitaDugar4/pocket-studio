@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect } from "react";
+import { captureShot } from "@/features/shots/captureShot";
+import { resolveSequence } from "@/lib/edit/sequence";
+import { useProjectStore } from "@/stores/projectStore";
 import { useSceneStore } from "@/stores/sceneStore";
 import { useSelectionStore } from "@/stores/selectionStore";
 import { useTimelineStore } from "@/stores/timelineStore";
@@ -16,6 +19,33 @@ const TOOL_KEYS: Record<string, TransformMode> = {
 
 /** One frame at 24fps — the unit a director thinks in. */
 const FRAME = 1 / 24;
+
+/**
+ * Shift+← / → steps between cuts. In the cutting room that means the clips of
+ * the sequence; in the scene builder it means the shots taken of this scene.
+ */
+function jumpShot(backwards: boolean): void {
+  const timeline = useTimelineStore.getState();
+  const project = useProjectStore.getState().project;
+  const scene = useSceneStore.getState().scene;
+  if (!project) return;
+
+  const merged = scene
+    ? { ...project, scenes: project.scenes.map((s) => (s.id === scene.id ? scene : s)) }
+    : project;
+
+  const clips = resolveSequence(merged);
+  const marks = clips.length
+    ? clips.map((clip) => clip.start)
+    : (scene?.shots ?? []).map((shot) => shot.sceneTime).sort((a, b) => a - b);
+  if (marks.length === 0) return;
+
+  const now = timeline.currentTime;
+  const target = backwards
+    ? [...marks].reverse().find((mark) => mark < now - 0.05)
+    : marks.find((mark) => mark > now + 0.05);
+  timeline.setTime(target ?? (backwards ? 0 : marks[marks.length - 1]));
+}
 
 function isTypingTarget(target: EventTarget | null): boolean {
   const element = target as HTMLElement | null;
@@ -54,6 +84,14 @@ export function useStudioShortcuts({ enabled = true }: { enabled?: boolean } = {
       }
 
       if (event.key === "Delete" || event.key === "Backspace") {
+        // A selected beat is the more specific target: remove it first.
+        const beatId = useSelectionStore.getState().selectedBeatId;
+        if (beatId) {
+          event.preventDefault();
+          useSceneStore.getState().removeBeat(beatId);
+          useSelectionStore.getState().selectBeat(null);
+          return;
+        }
         const selection = useSelectionStore.getState().selection;
         if (selection) {
           event.preventDefault();
@@ -63,20 +101,23 @@ export function useStudioShortcuts({ enabled = true }: { enabled?: boolean } = {
         return;
       }
 
+      if (event.key === "k" || event.key === "K") {
+        event.preventDefault();
+        void captureShot();
+        return;
+      }
+
       if (event.key === "f" || event.key === "F") {
         event.preventDefault();
         useViewportStore.getState().requestFrameSelected();
         return;
       }
 
-      if (event.key === "ArrowLeft") {
+      if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
         event.preventDefault();
-        timeline.setTime(timeline.currentTime - FRAME);
-        return;
-      }
-      if (event.key === "ArrowRight") {
-        event.preventDefault();
-        timeline.setTime(timeline.currentTime + FRAME);
+        const back = event.key === "ArrowLeft";
+        if (event.shiftKey) jumpShot(back);
+        else timeline.setTime(timeline.currentTime + (back ? -FRAME : FRAME));
         return;
       }
 

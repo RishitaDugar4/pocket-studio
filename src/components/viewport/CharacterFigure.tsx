@@ -98,6 +98,30 @@ const POSES: Record<CharacterAnimation, Pose> = {
   },
 };
 
+/**
+ * Sitting is a state of the legs, so any upper-body action can play on top of
+ * it: an actor who sits down and then takes a call stays in the chair.
+ */
+const seatedCache = new Map<CharacterAnimation, Pose>();
+
+function seatedVariant(animation: CharacterAnimation): Pose {
+  const cached = seatedCache.get(animation);
+  if (cached) return cached;
+  const upper = POSES[animation];
+  const sit = POSES.SIT;
+  const pose: Pose = {
+    ...upper,
+    hipDrop: sit.hipDrop,
+    hipL: sit.hipL,
+    hipR: sit.hipR,
+    kneeL: sit.kneeL,
+    kneeR: sit.kneeR,
+    torsoLean: Math.max(upper.torsoLean, sit.torsoLean * 0.8),
+  };
+  seatedCache.set(animation, pose);
+  return pose;
+}
+
 /** Per-pose idle motion. Subtle on purpose: previs, not a game character. */
 const MOTION: Record<CharacterAnimation, { breathe: number; cycle: number; sway: number }> = {
   IDLE: { breathe: 1, cycle: 0, sway: 0.6 },
@@ -146,6 +170,8 @@ export interface CharacterFigureProps {
   highlight?: number;
   /** Offsets the idle motion so two actors never breathe in lockstep. */
   seed?: number;
+  /** Keep the lower body in the chair while the upper body does something else. */
+  seated?: boolean;
 }
 
 export const CharacterFigure = memo(function CharacterFigure({
@@ -154,6 +180,7 @@ export const CharacterFigure = memo(function CharacterFigure({
   accentColor,
   highlight = 0,
   seed = 0,
+  seated = false,
 }: CharacterFigureProps) {
   const definition = getCharacterDefinition(definitionId);
   const { build } = definition;
@@ -165,7 +192,7 @@ export const CharacterFigure = memo(function CharacterFigure({
   const phase = useRef(seed);
 
   useFrame((_, delta) => {
-    const target = POSES[animation];
+    const target = seated ? seatedVariant(animation) : POSES[animation];
     const motion = MOTION[animation];
     phase.current += delta;
     const t = phase.current;

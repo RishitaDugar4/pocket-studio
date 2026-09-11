@@ -18,6 +18,8 @@ interface ProjectState {
   syncScene: (scene: SceneDoc) => void;
   addScene: (scene: SceneDoc) => void;
   removeScene: (sceneId: string) => void;
+  /** Attaches a freshly rendered storyboard frame to a shot in any scene. */
+  setShotFrame: (shotId: string, frameUrl: string) => void;
   addCastMember: (member: CastMemberDoc) => void;
   updateCastMember: (id: string, patch: Partial<CastMemberDoc>) => void;
   setSaveStatus: (status: SaveStatus) => void;
@@ -72,6 +74,26 @@ export const useProjectStore = create<ProjectState>((set) => ({
       return {
         project: { ...state.project, scenes },
         activeSceneId: state.activeSceneId === sceneId ? (scenes[0]?.id ?? null) : state.activeSceneId,
+      };
+    }),
+
+  setShotFrame: (shotId, frameUrl) =>
+    set((state) => {
+      if (!state.project) return state;
+      return {
+        project: {
+          ...state.project,
+          scenes: state.project.scenes.map((scene) =>
+            scene.shots.some((shot) => shot.id === shotId)
+              ? {
+                  ...scene,
+                  shots: scene.shots.map((shot) =>
+                    shot.id === shotId ? { ...shot, frameUrl } : shot,
+                  ),
+                }
+              : scene,
+          ),
+        },
       };
     }),
 

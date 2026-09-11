@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ToolButton } from "@/components/ui/Button";
 import { Checkbox, Select } from "@/components/ui/Inputs";
 import { cn } from "@/components/ui/cn";
+import { captureShot } from "@/features/shots/captureShot";
 import { useSceneStore } from "@/stores/sceneStore";
 import { ASPECT_RATIOS, useViewportStore } from "@/stores/viewportStore";
 import type { GuideSettings, TransformMode } from "@/types";
@@ -144,6 +145,20 @@ export function ViewportToolbar() {
       </div>
 
       <div className="ml-auto flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => void captureShot()}
+          title="Capture the current framing as a shot (K)"
+          className="slate flex h-7 items-center gap-1.5 rounded border border-amber-dim bg-[#241f14] px-2.5 text-amber-film transition-colors hover:bg-[#2f2818]"
+        >
+          <svg viewBox="0 0 14 14" className="h-3 w-3 fill-current">
+            <path d="M5 1.6 h4 l0.8 1.2 h2.2 a1 1 0 0 1 1 1 v7 a1 1 0 0 1 -1 1 h-10 a1 1 0 0 1 -1 -1 v-7 a1 1 0 0 1 1 -1 h2.2 Z M7 5.2 a2.6 2.6 0 1 0 0 5.2 a2.6 2.6 0 0 0 0 -5.2 Z" />
+          </svg>
+          Capture Shot
+        </button>
+
+        <div className="h-5 w-px bg-ink-700" />
+
         <button
           type="button"
           onClick={() => setGuidesOpen((open) => !open)}

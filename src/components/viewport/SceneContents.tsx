@@ -7,12 +7,14 @@ import { getCharacterDefinition } from "@/data/characters";
 import { getEnvironment } from "@/data/environments";
 import { getPropDefinition } from "@/data/props";
 import { useSelectionStore } from "@/stores/selectionStore";
+import { beatsFor } from "@/lib/animation";
 import { useViewportStore } from "@/stores/viewportStore";
 import type { SceneDoc, SelectionKind, Vec3 } from "@/types";
 import { CharacterFigure } from "./CharacterFigure";
 import { PropModel } from "./PropModel";
 import { SceneLights } from "./SceneLights";
 import { CameraHelper, LightHelper, SelectionMarker } from "./CameraHelper";
+import { BlockingMotion, useLivePose } from "./BlockingMotion";
 import { EnvironmentSet } from "./sets/EnvironmentSet";
 import { DeselectOnBackground } from "./Gizmo";
 import { objectKey, useObjectRegistry } from "./objectRegistry";
@@ -39,11 +41,13 @@ function useRegisterObject(kind: SelectionKind, id: string) {
 
 function SelectableCharacter({
   character,
+  beats,
   selected,
   hovered,
   interactive,
 }: {
   character: SceneDoc["characters"][number];
+  beats: SceneDoc["blockingEvents"];
   selected: boolean;
   hovered: boolean;
   interactive: boolean;
@@ -52,6 +56,7 @@ function SelectableCharacter({
   const select = useSelectionStore((s) => s.select);
   const setHovered = useSelectionStore((s) => s.setHovered);
   const definition = getCharacterDefinition(character.definitionId);
+  const [pose, setPose] = useLivePose(character.animation);
 
   return (
     <group
@@ -70,9 +75,11 @@ function SelectableCharacter({
       onPointerOver={interactive ? () => setHovered({ kind: "character", id: character.id }) : undefined}
       onPointerOut={interactive ? () => setHovered(null) : undefined}
     >
+      <BlockingMotion character={character} beats={beats} target={ref} onPose={setPose} />
       <CharacterFigure
         definitionId={character.definitionId}
-        animation={character.animation}
+        animation={beats.length > 0 ? pose.animation : character.animation}
+        seated={beats.length > 0 ? pose.seated : character.animation === "SIT"}
         accentColor={character.accentColor}
         highlight={selected ? 1 : hovered ? 0.4 : 0}
         seed={phaseSeed(character.id)}
@@ -164,7 +171,16 @@ function SelectableLight({
   );
 }
 
-export function SceneContents({ scene, mode }: { scene: SceneDoc; mode: "ORBIT" | "CAMERA" }) {
+export function SceneContents({
+  scene,
+  mode,
+  preview = false,
+}: {
+  scene: SceneDoc;
+  mode: "ORBIT" | "CAMERA";
+  /** A clean render for previews and exports: no selection marks at all. */
+  preview?: boolean;
+}) {
   const selection = useSelectionStore((s) => s.selection);
   const hovered = useSelectionStore((s) => s.hovered);
   const showGrid = useViewportStore((s) => s.showGrid);
@@ -183,8 +199,9 @@ export function SceneContents({ scene, mode }: { scene: SceneDoc; mode: "ORBIT" 
         <SelectableCharacter
           key={character.id}
           character={character}
-          selected={selection?.kind === "character" && selection.id === character.id}
-          hovered={hovered?.kind === "character" && hovered.id === character.id}
+          beats={beatsFor(scene, character.id)}
+          selected={!preview && selection?.kind === "character" && selection.id === character.id}
+          hovered={!preview && hovered?.kind === "character" && hovered.id === character.id}
           interactive={interactive}
         />
       ))}
@@ -193,8 +210,8 @@ export function SceneContents({ scene, mode }: { scene: SceneDoc; mode: "ORBIT" 
         <SelectableProp
           key={prop.id}
           prop={prop}
-          selected={selection?.kind === "prop" && selection.id === prop.id}
-          hovered={hovered?.kind === "prop" && hovered.id === prop.id}
+          selected={!preview && selection?.kind === "prop" && selection.id === prop.id}
+          hovered={!preview && hovered?.kind === "prop" && hovered.id === prop.id}
           interactive={interactive}
         />
       ))}

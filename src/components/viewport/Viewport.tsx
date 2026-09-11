@@ -14,6 +14,7 @@ import {
   shotSizeForDistance,
   v,
 } from "@/lib/cinematography";
+import { focusPointFor } from "@/lib/cinematography/focus";
 import { useSceneStore } from "@/stores/sceneStore";
 import { useSelectionStore } from "@/stores/selectionStore";
 import { aspectValue, useViewportStore } from "@/stores/viewportStore";
@@ -24,8 +25,9 @@ import { Gizmo } from "./Gizmo";
 import { Guides } from "./Guides";
 import { SceneContents } from "./SceneContents";
 import { ViewportToolbar } from "./ViewportToolbar";
-import { PlaybackClock } from "./PlaybackClock";
+import { StageClockDriver } from "./PlaybackClock";
 import { DropBridgeBinding } from "./DropBridgeBinding";
+import { CaptureBridgeBinding } from "./CaptureBridgeBinding";
 import { FrameController } from "./FrameController";
 import { floorPointFromEvent } from "./dropBridge";
 
@@ -100,9 +102,9 @@ export function Viewport({ scene }: { scene: SceneDoc }) {
           }
         >
           <Canvas
-            shadows
+            shadows="percentage"
             dpr={[1, 1.75]}
-            gl={{ antialias: true, powerPreference: "high-performance" }}
+            gl={{ antialias: true, powerPreference: "high-performance", preserveDrawingBuffer: true }}
             onCreated={({ gl, scene: threeScene }) => {
               gl.toneMapping = THREE.ACESFilmicToneMapping;
               gl.toneMappingExposure = 1.05;
@@ -113,8 +115,9 @@ export function Viewport({ scene }: { scene: SceneDoc }) {
             <color attach="background" args={[preset.backgroundColor]} />
             <fog attach="fog" args={[preset.backgroundColor, 22, 90]} />
 
-            <PlaybackClock />
+            <StageClockDriver getSceneTime={() => useTimelineStore.getState().currentTime} />
             <DropBridgeBinding />
+            <CaptureBridgeBinding />
             <FrameController />
             {activeCamera ? (
               <CameraRig
@@ -213,29 +216,7 @@ function surfaceHeightAt(position: Vec3): number {
 function useFocusPoint(scene: SceneDoc): Vec3 | null {
   const activeCamera = scene.cameras.find((c) => c.isActive) ?? scene.cameras[0];
   const focusTargetId = activeCamera?.focusTargetId ?? null;
-  return useMemo(() => {
-    if (!focusTargetId) return null;
-    const character = scene.characters.find((c) => c.id === focusTargetId);
-    if (character) {
-      return [
-        character.position[0],
-        character.position[1] +
-          bodyHeight(character.definitionId, character.scale) * 0.9 -
-          poseAimDrop(character.definitionId, character.scale, character.animation),
-        character.position[2],
-      ];
-    }
-    const prop = scene.props.find((p) => p.id === focusTargetId);
-    if (prop) {
-      const definition = getPropDefinition(prop.definitionId);
-      return [
-        prop.position[0],
-        prop.position[1] + definition.size[1] * prop.scale * 0.6,
-        prop.position[2],
-      ];
-    }
-    return null;
-  }, [focusTargetId, scene.characters, scene.props]);
+  return useMemo(() => focusPointFor(scene, focusTargetId), [scene, focusTargetId]);
 }
 
 /** Viewfinder readout: what lens, what size, how long. */

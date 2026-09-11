@@ -3,8 +3,10 @@
 import { useEffect, useRef } from "react";
 import { TransformControls } from "@react-three/drei";
 import type * as THREE from "three";
+import { beatsFor } from "@/lib/animation";
 import { useSceneStore } from "@/stores/sceneStore";
 import { useSelectionStore } from "@/stores/selectionStore";
+import { useTimelineStore } from "@/stores/timelineStore";
 import { useViewportStore } from "@/stores/viewportStore";
 import type { Selection, Vec3 } from "@/types";
 import { objectKey, useObjectRegistry } from "./objectRegistry";
@@ -26,8 +28,18 @@ export function Gizmo({ selection }: { selection: Selection }) {
     const scale = Math.max(target.scale.x, 0.2);
 
     if (selection.kind === "character") {
-      // Characters keep a uniform scale: an actor is a person, not a prop.
-      store.updateCharacter(selection.id, { position, rotation, scale: clampScale(scale) }, true);
+      const beatId = useSelectionStore.getState().selectedBeatId;
+      const beats = store.scene ? beatsFor(store.scene, selection.id) : [];
+      const beat = beats.find((b) => b.id === beatId);
+
+      if (beat) {
+        // Editing a beat moves where the actor ends up, not where they start.
+        // The store decides whether that turns the beat into a walk.
+        store.updateBeat(beat.id, { endPosition: position, rotation }, true);
+      } else if (beats.length === 0 || useTimelineStore.getState().currentTime === 0) {
+        // Characters keep a uniform scale: an actor is a person, not a prop.
+        store.updateCharacter(selection.id, { position, rotation, scale: clampScale(scale) }, true);
+      }
     } else if (selection.kind === "prop") {
       store.updateProp(selection.id, { position, rotation, scale: clampScale(scale) }, true);
     } else if (selection.kind === "light") {

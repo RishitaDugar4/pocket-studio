@@ -1,4 +1,6 @@
 import type {
+  AudioAssetDoc,
+  TimelineItemDoc,
   CameraDoc,
   CameraHeight,
   CameraMovementDoc,
@@ -140,18 +142,21 @@ export function toCameraMovement(row: Row): CameraMovementDoc {
 
 export function toShot(row: Row): ShotDoc {
   const movements = Array.isArray(row.movements) ? (row.movements as Row[]) : [];
+  const frame = row.storyboardFrame as Row | null | undefined;
   return {
     id: row.id as string,
     index: row.index as number,
     name: row.name as string,
     shotSize: row.shotSize as ShotSize,
     duration: (row.duration as number) ?? 4,
+    sceneTime: (row.sceneTime as number) ?? 0,
     cameraState: asCameraTransform(row.cameraState),
     subjects: asStringArray(row.subjects),
     notes: (row.notes as string) ?? "",
     transition: (row.transition as TransitionType) ?? "CUT",
     cameraId: (row.cameraId as string | null) ?? null,
     movements: movements.map(toCameraMovement),
+    frameUrl: frame?.imageKey ? `/api/assets/${frame.imageKey as string}` : null,
   };
 }
 
@@ -209,11 +214,38 @@ export function toScene(row: Row, cast: Map<string, CastMemberDoc>): SceneDoc {
   };
 }
 
+export function toTimelineItem(row: Row): TimelineItemDoc {
+  return {
+    id: row.id as string,
+    index: row.index as number,
+    track: (row.track as TimelineItemDoc["track"]) ?? "VIDEO",
+    startTime: (row.startTime as number) ?? 0,
+    duration: (row.duration as number) ?? 4,
+    trimIn: (row.trimIn as number) ?? 0,
+    trimOut: (row.trimOut as number) ?? 0,
+    transition: (row.transition as TransitionType) ?? "CUT",
+    shotId: (row.shotId as string | null) ?? null,
+    audioAssetId: (row.audioAssetId as string | null) ?? null,
+  };
+}
+
+export function toAudioAsset(row: Row): AudioAssetDoc {
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    kind: (row.kind as AudioAssetDoc["kind"]) ?? "SFX",
+    url: `/api/assets/${row.storageKey as string}`,
+    duration: (row.duration as number) ?? 0,
+  };
+}
+
 export function toProject(row: Row): ProjectDoc {
   const castRows = (row.cast as Row[] | undefined) ?? [];
   const cast = castRows.map(toCastMember);
   const castMap = new Map(cast.map((c) => [c.id, c]));
   const scenes = ((row.scenes as Row[] | undefined) ?? []).map((s) => toScene(s, castMap));
+  const timeline = ((row.timeline as Row[] | undefined) ?? []).map(toTimelineItem);
+  const audio = ((row.audio as Row[] | undefined) ?? []).map(toAudioAsset);
   return {
     id: row.id as string,
     title: row.title as string,
@@ -229,5 +261,7 @@ export function toProject(row: Row): ProjectDoc {
     updatedAt: (row.updatedAt as Date).toISOString(),
     cast,
     scenes,
+    timeline,
+    audio,
   };
 }

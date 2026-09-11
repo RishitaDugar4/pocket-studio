@@ -182,12 +182,16 @@ export interface ShotDoc {
   name: string;
   shotSize: ShotSize;
   duration: number;
+  /** Scene time the shot starts at — blocking plays from here. */
+  sceneTime: number;
   cameraState: CameraTransform;
   subjects: string[];
   notes: string;
   transition: TransitionType;
   cameraId: string | null;
   movements: CameraMovementDoc[];
+  /** Storyboard frame captured at the moment the shot was taken. */
+  frameUrl: string | null;
 }
 
 export interface BlockingEventDoc {
@@ -221,6 +225,34 @@ export interface SceneDoc {
   blockingEvents: BlockingEventDoc[];
 }
 
+export const AUDIO_TRACKS = ["DIALOGUE", "AMBIENCE", "SFX", "MUSIC"] as const;
+export type AudioTrack = (typeof AUDIO_TRACKS)[number];
+export type TimelineTrack = "VIDEO" | AudioTrack;
+
+export interface AudioAssetDoc {
+  id: string;
+  name: string;
+  kind: AudioTrack;
+  url: string;
+  duration: number;
+}
+
+/** One clip in the cut: a shot on the video track, or a sound on an audio track. */
+export interface TimelineItemDoc {
+  id: string;
+  index: number;
+  track: TimelineTrack;
+  /** Seconds from the start of the sequence (audio only; video items are packed). */
+  startTime: number;
+  duration: number;
+  /** Seconds trimmed from the head and tail of the source. */
+  trimIn: number;
+  trimOut: number;
+  transition: TransitionType;
+  shotId: string | null;
+  audioAssetId: string | null;
+}
+
 export interface CastMemberDoc {
   id: string;
   name: string;
@@ -243,6 +275,8 @@ export interface ProjectDoc {
   updatedAt: string;
   cast: CastMemberDoc[];
   scenes: SceneDoc[];
+  timeline: TimelineItemDoc[];
+  audio: AudioAssetDoc[];
 }
 
 /** Dashboard-sized view of a project — no scene contents. */

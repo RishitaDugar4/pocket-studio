@@ -4,6 +4,7 @@ import { toProject } from "./serialize";
 import { buildNewScene, newId } from "./defaults";
 import type {
   CastMemberDoc,
+  TimelineItemDoc,
   TimeOfDay,
   LightingPresetId,
   ProjectDoc,
@@ -27,6 +28,8 @@ export async function ensureLocalUser(): Promise<string> {
 
 const projectInclude = {
   cast: { orderBy: { name: "asc" } },
+  timeline: { orderBy: { index: "asc" } },
+  audio: { orderBy: { name: "asc" } },
   scenes: {
     orderBy: { index: "asc" },
     include: {
@@ -34,7 +37,10 @@ const projectInclude = {
       props: true,
       lights: true,
       cameras: { orderBy: { name: "asc" } },
-      shots: { orderBy: { index: "asc" }, include: { movements: true } },
+      shots: {
+        orderBy: { index: "asc" },
+        include: { movements: true, storyboardFrame: true },
+      },
       blockingEvents: true,
     },
   },
@@ -199,6 +205,43 @@ export async function insertScene(scene: SceneDoc): Promise<void> {
           movementIntensity: c.movementIntensity,
         })),
       },
+      blockingEvents: {
+        create: scene.blockingEvents.map((b) => ({
+          id: b.id,
+          sceneCharacterId: b.sceneCharacterId,
+          startTime: b.startTime,
+          endTime: b.endTime,
+          action: b.action,
+          startPosition: b.startPosition,
+          endPosition: b.endPosition,
+          rotation: b.rotation,
+        })),
+      },
+      shots: {
+        create: scene.shots.map((shot) => ({
+          id: shot.id,
+          index: shot.index,
+          name: shot.name,
+          shotSize: shot.shotSize,
+          duration: shot.duration,
+          sceneTime: shot.sceneTime,
+          cameraState: shot.cameraState as unknown as Prisma.InputJsonValue,
+          subjects: shot.subjects,
+          notes: shot.notes,
+          transition: shot.transition,
+          movements: {
+            create: shot.movements.map((m) => ({
+              id: m.id,
+              type: m.type,
+              startTime: m.startTime,
+              duration: m.duration,
+              intensity: m.intensity,
+              startTransform: m.startTransform as unknown as Prisma.InputJsonValue,
+              endTransform: m.endTransform as unknown as Prisma.InputJsonValue,
+            })),
+          },
+        })),
+      },
     },
   });
 }
@@ -260,6 +303,12 @@ export async function saveScene(scene: SceneDoc, cast: CastMemberDoc[]): Promise
   const propIds = scene.props.map((p) => p.id);
   const lightIds = scene.lights.map((l) => l.id);
   const cameraIds = scene.cameras.map((c) => c.id);
+  const beatIds = scene.blockingEvents.map((b) => b.id);
+  const shotIds = scene.shots.map((s) => s.id);
+  const movementIds = scene.shots.flatMap((s) => s.movements.map((m) => m.id));
+
+  /** `notIn: []` matches nothing in Prisma, so keep a sentinel in the list. */
+  const keep = (ids: string[]) => (ids.length ? ids : ["__none__"]);
 
   await prisma.$transaction([
     prisma.scene.update({
@@ -274,17 +323,27 @@ export async function saveScene(scene: SceneDoc, cast: CastMemberDoc[]): Promise
         notes: scene.notes,
       },
     }),
+    // Blocking beats hang off scene characters, so they go first.
+    prisma.blockingEvent.deleteMany({
+      where: { sceneId: scene.id, id: { notIn: keep(beatIds) } },
+    }),
+    prisma.cameraMovement.deleteMany({
+      where: { shot: { sceneId: scene.id }, id: { notIn: keep(movementIds) } },
+    }),
+    prisma.shot.deleteMany({
+      where: { sceneId: scene.id, id: { notIn: keep(shotIds) } },
+    }),
     prisma.sceneCharacter.deleteMany({
-      where: { sceneId: scene.id, id: { notIn: characterIds.length ? characterIds : ["__none__"] } },
+      where: { sceneId: scene.id, id: { notIn: keep(characterIds) } },
     }),
     prisma.sceneProp.deleteMany({
-      where: { sceneId: scene.id, id: { notIn: propIds.length ? propIds : ["__none__"] } },
+      where: { sceneId: scene.id, id: { notIn: keep(propIds) } },
     }),
     prisma.light.deleteMany({
-      where: { sceneId: scene.id, id: { notIn: lightIds.length ? lightIds : ["__none__"] } },
+      where: { sceneId: scene.id, id: { notIn: keep(lightIds) } },
     }),
     prisma.camera.deleteMany({
-      where: { sceneId: scene.id, id: { notIn: cameraIds.length ? cameraIds : ["__none__"] } },
+      where: { sceneId: scene.id, id: { notIn: keep(cameraIds) } },
     }),
     ...scene.characters.map((c) =>
       prisma.sceneCharacter.upsert({
@@ -391,7 +450,129 @@ export async function saveScene(scene: SceneDoc, cast: CastMemberDoc[]): Promise
         },
       }),
     ),
+    ...scene.blockingEvents.map((beat) =>
+      prisma.blockingEvent.upsert({
+        where: { id: beat.id },
+        create: {
+          id: beat.id,
+          sceneId: scene.id,
+          sceneCharacterId: beat.sceneCharacterId,
+          startTime: beat.startTime,
+          endTime: beat.endTime,
+          action: beat.action,
+          startPosition: beat.startPosition,
+          endPosition: beat.endPosition,
+          rotation: beat.rotation,
+        },
+        update: {
+          startTime: beat.startTime,
+          endTime: beat.endTime,
+          action: beat.action,
+          startPosition: beat.startPosition,
+          endPosition: beat.endPosition,
+          rotation: beat.rotation,
+        },
+      }),
+    ),
+    ...scene.shots.map((shot) =>
+      prisma.shot.upsert({
+        where: { id: shot.id },
+        create: {
+          id: shot.id,
+          sceneId: scene.id,
+          index: shot.index,
+          name: shot.name,
+          shotSize: shot.shotSize,
+          duration: shot.duration,
+          sceneTime: shot.sceneTime,
+          cameraState: shot.cameraState as unknown as Prisma.InputJsonValue,
+          subjects: shot.subjects,
+          notes: shot.notes,
+          transition: shot.transition,
+          cameraId: shot.cameraId,
+        },
+        update: {
+          index: shot.index,
+          name: shot.name,
+          shotSize: shot.shotSize,
+          duration: shot.duration,
+          sceneTime: shot.sceneTime,
+          cameraState: shot.cameraState as unknown as Prisma.InputJsonValue,
+          subjects: shot.subjects,
+          notes: shot.notes,
+          transition: shot.transition,
+        },
+      }),
+    ),
+    ...scene.shots.flatMap((shot) =>
+      shot.movements.map((movement) =>
+        prisma.cameraMovement.upsert({
+          where: { id: movement.id },
+          create: {
+            id: movement.id,
+            shotId: shot.id,
+            type: movement.type,
+            startTime: movement.startTime,
+            duration: movement.duration,
+            intensity: movement.intensity,
+            startTransform: movement.startTransform as unknown as Prisma.InputJsonValue,
+            endTransform: movement.endTransform as unknown as Prisma.InputJsonValue,
+          },
+          update: {
+            type: movement.type,
+            startTime: movement.startTime,
+            duration: movement.duration,
+            intensity: movement.intensity,
+            startTransform: movement.startTransform as unknown as Prisma.InputJsonValue,
+            endTransform: movement.endTransform as unknown as Prisma.InputJsonValue,
+          },
+        }),
+      ),
+    ),
     prisma.project.update({ where: { id: scene.projectId }, data: { updatedAt: new Date() } }),
+  ]);
+}
+
+/** Replaces the whole cut in one write — the client owns the item ids. */
+export async function saveTimeline(
+  projectId: string,
+  items: TimelineItemDoc[],
+): Promise<void> {
+  const ids = items.map((item) => item.id);
+  await prisma.$transaction([
+    prisma.timelineItem.deleteMany({
+      where: { projectId, id: { notIn: ids.length ? ids : ["__none__"] } },
+    }),
+    ...items.map((item) =>
+      prisma.timelineItem.upsert({
+        where: { id: item.id },
+        create: {
+          id: item.id,
+          projectId,
+          index: item.index,
+          track: item.track,
+          startTime: item.startTime,
+          duration: item.duration,
+          trimIn: item.trimIn,
+          trimOut: item.trimOut,
+          transition: item.transition,
+          shotId: item.shotId,
+          audioAssetId: item.audioAssetId,
+        },
+        update: {
+          index: item.index,
+          track: item.track,
+          startTime: item.startTime,
+          duration: item.duration,
+          trimIn: item.trimIn,
+          trimOut: item.trimOut,
+          transition: item.transition,
+          shotId: item.shotId,
+          audioAssetId: item.audioAssetId,
+        },
+      }),
+    ),
+    prisma.project.update({ where: { id: projectId }, data: { updatedAt: new Date() } }),
   ]);
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, PerspectiveCamera } from "@react-three/drei";
 import * as THREE from "three";
@@ -8,6 +8,7 @@ import { evaluateMovement, verticalFovDeg, v } from "@/lib/cinematography";
 import { useTimelineStore } from "@/stores/timelineStore";
 import type { CameraDoc, Vec3 } from "@/types";
 import { liveFrame } from "./liveFrame";
+import { captureBridge } from "./captureBridge";
 
 /**
  * Owns both cameras: the editor's orbit camera (for staging) and the active
@@ -27,6 +28,15 @@ export function CameraRig({
 }) {
   const editorRef = useRef<THREE.PerspectiveCamera>(null);
   const shotRef = useRef<THREE.PerspectiveCamera>(null);
+
+  // Publish the shot camera so a capture always renders the real framing,
+  // whichever view the director happens to be working in.
+  useEffect(() => {
+    captureBridge.shotCamera = shotRef.current;
+    return () => {
+      captureBridge.shotCamera = null;
+    };
+  }, [mode]);
   const size = useThree((s) => s.size);
 
   const base = useMemo(
