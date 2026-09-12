@@ -42,6 +42,8 @@ const EXTENSIONS: Record<string, string> = {
   "audio/wav": ".wav",
   "audio/ogg": ".ogg",
   "audio/mp4": ".m4a",
+  // Microphone takes. The .weba extension keeps audio distinct from video/webm.
+  "audio/webm": ".weba",
   "video/webm": ".webm",
 };
 

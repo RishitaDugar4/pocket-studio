@@ -6,7 +6,21 @@ import { storage, storageKey } from "@/lib/storage";
 type Params = { params: Promise<{ id: string }> };
 
 const MAX_BYTES = 25 * 1024 * 1024;
-const ALLOWED = new Set(["audio/mpeg", "audio/wav", "audio/x-wav", "audio/ogg", "audio/mp4", "audio/aac"]);
+const ALLOWED = new Set([
+  "audio/mpeg",
+  "audio/wav",
+  "audio/x-wav",
+  "audio/ogg",
+  "audio/mp4",
+  "audio/aac",
+  // Microphone recordings.
+  "audio/webm",
+]);
+
+/** Browsers append codec parameters: "audio/webm;codecs=opus". */
+function baseType(contentType: string): string {
+  return contentType.split(";")[0]!.trim().toLowerCase();
+}
 
 /** Uploads one sound and registers it on the project. */
 export async function POST(request: Request, { params }: Params) {
@@ -22,7 +36,7 @@ export async function POST(request: Request, { params }: Params) {
   if (file.size > MAX_BYTES) {
     return NextResponse.json({ error: "That file is larger than 25 MB." }, { status: 413 });
   }
-  const contentType = file.type || "audio/mpeg";
+  const contentType = baseType(file.type || "audio/mpeg");
   if (!ALLOWED.has(contentType)) {
     return NextResponse.json(
       { error: `Unsupported audio type: ${contentType}` },

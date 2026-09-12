@@ -2,10 +2,9 @@
 
 import { useRef, useState } from "react";
 import { cn } from "@/components/ui/cn";
-import { useProjectStore } from "@/stores/projectStore";
 import { useSequenceStore } from "@/stores/sequenceStore";
-import { useTimelineStore } from "@/stores/timelineStore";
-import { AUDIO_TRACKS, type AudioAssetDoc, type AudioTrack, type ProjectDoc } from "@/types";
+import { AUDIO_TRACKS, type AudioTrack, type ProjectDoc } from "@/types";
+import { AddSoundMenu } from "./AddSoundMenu";
 import { AudioEngine } from "./AudioEngine";
 
 const TRACK_LABELS: Record<AudioTrack, string> = {
@@ -16,11 +15,12 @@ const TRACK_LABELS: Record<AudioTrack, string> = {
 };
 
 /**
- * Sound against picture (§24). Audio is uploaded by the director — Pocket Studio
- * does not ship a sound library — and laid against the same clock the cut runs on.
+ * Sound against picture (§24). Three sources feed these tracks — the generated
+ * library, the microphone, and files from the computer — and all of them end up
+ * as the same kind of clip on the same clock as the cut.
  */
 export function AudioTracks({ project, duration }: { project: ProjectDoc; duration: number }) {
-  const [busyTrack, setBusyTrack] = useState<AudioTrack | null>(null);
+  const [openTrack, setOpenTrack] = useState<AudioTrack | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   return (
@@ -32,8 +32,9 @@ export function AudioTracks({ project, duration }: { project: ProjectDoc; durati
           track={track}
           project={project}
           duration={duration}
-          busy={busyTrack === track}
-          onBusy={setBusyTrack}
+          open={openTrack === track}
+          onToggle={() => setOpenTrack((current) => (current === track ? null : track))}
+          onClose={() => setOpenTrack(null)}
           onError={setError}
         />
       ))}
@@ -46,63 +47,29 @@ function TrackRow({
   track,
   project,
   duration,
-  busy,
-  onBusy,
+  open,
+  onToggle,
+  onClose,
   onError,
 }: {
   track: AudioTrack;
   project: ProjectDoc;
   duration: number;
-  busy: boolean;
-  onBusy: (track: AudioTrack | null) => void;
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
   onError: (message: string | null) => void;
 }) {
-  const input = useRef<HTMLInputElement>(null);
   const lane = useRef<HTMLDivElement>(null);
-  const addAudioClip = useSequenceStore((s) => s.addAudioClip);
   const moveAudioClip = useSequenceStore((s) => s.moveAudioClip);
   const removeClip = useSequenceStore((s) => s.remove);
   const assets = new Map(project.audio.map((asset) => [asset.id, asset]));
   const clips = project.timeline.filter((item) => item.track === track && item.audioAssetId);
 
-  const upload = async (file: File) => {
-    onBusy(track);
-    onError(null);
-    try {
-      const length = await readDuration(file);
-      const form = new FormData();
-      form.set("file", file);
-      form.set("kind", track);
-      form.set("duration", String(length));
-
-      const response = await fetch(`/api/projects/${project.id}/audio`, {
-        method: "POST",
-        body: form,
-      });
-      if (!response.ok) {
-        const body = (await response.json().catch(() => ({}))) as { error?: string };
-        throw new Error(body.error ?? "Upload failed.");
-      }
-      const { asset } = (await response.json()) as { asset: AudioAssetDoc };
-
-      // Register the asset locally, then drop it at the playhead.
-      useProjectStore.getState().patchProject({ audio: [...project.audio, asset] });
-      addAudioClip(
-        asset.id,
-        track,
-        useTimelineStore.getState().currentTime,
-        asset.duration || 3,
-      );
-    } catch (caught) {
-      onError(caught instanceof Error ? caught.message : "Upload failed.");
-    } finally {
-      onBusy(null);
-    }
-  };
-
   return (
-    <div className="flex items-center gap-2 py-0.5">
+    <div className="relative flex items-center gap-2 py-0.5">
       <span className="slate w-[70px] shrink-0 truncate">{TRACK_LABELS[track]}</span>
+
       <div
         ref={lane}
         className="relative h-6 min-w-0 flex-1 overflow-hidden rounded-sm border border-ink-800 bg-ink-850"
@@ -115,7 +82,7 @@ function TrackRow({
             <button
               key={clip.id}
               type="button"
-              title={`${asset?.name ?? "Audio"} · double-click to remove`}
+              title={`${asset?.name ?? "Audio"} · ${clip.duration.toFixed(1)}s · double-click to remove`}
               onDoubleClick={() => removeClip(clip.id)}
               onPointerDown={(event) => {
                 const rect = lane.current?.getBoundingClientRect();
@@ -148,40 +115,28 @@ function TrackRow({
           </span>
         ) : null}
       </div>
+
       <button
         type="button"
-        disabled={busy}
-        onClick={() => input.current?.click()}
-        className="slate shrink-0 rounded border border-ink-700 px-1.5 py-0.5 text-fog-400 transition-colors hover:text-amber-film disabled:opacity-40"
+        onClick={onToggle}
+        className={cn(
+          "slate shrink-0 rounded border px-1.5 py-0.5 transition-colors",
+          open
+            ? "border-amber-dim bg-[#221d14] text-amber-film"
+            : "border-ink-700 text-fog-400 hover:text-amber-film",
+        )}
       >
-        {busy ? "…" : "+ Sound"}
+        + Sound
       </button>
-      <input
-        ref={input}
-        type="file"
-        accept="audio/*"
-        hidden
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          if (file) void upload(file);
-          event.target.value = "";
-        }}
-      />
+
+      {open ? (
+        <AddSoundMenu
+          projectId={project.id}
+          track={track}
+          onDone={onClose}
+          onError={onError}
+        />
+      ) : null}
     </div>
   );
-}
-
-/** Reads a file's real length so the clip is laid in at the right width. */
-function readDuration(file: File): Promise<number> {
-  return new Promise((resolve) => {
-    const url = URL.createObjectURL(file);
-    const audio = new Audio();
-    const done = (value: number) => {
-      URL.revokeObjectURL(url);
-      resolve(value);
-    };
-    audio.addEventListener("loadedmetadata", () => done(Number.isFinite(audio.duration) ? audio.duration : 0));
-    audio.addEventListener("error", () => done(0));
-    audio.src = url;
-  });
 }

@@ -23,16 +23,23 @@ export async function PUT(request: Request, { params }: Params) {
   // Replace the previous frame rather than letting old ones pile up.
   if (shot.storyboardFrame) await storage.remove(shot.storyboardFrame.imageKey);
 
-  await prisma.storyboardFrame.upsert({
-    where: { shotId },
-    create: {
-      shotId,
-      imageKey: key,
-      width: body.width ?? 640,
-      height: body.height ?? 360,
-    },
-    update: { imageKey: key, width: body.width ?? 640, height: body.height ?? 360 },
-  });
+  try {
+    await prisma.storyboardFrame.upsert({
+      where: { shotId },
+      create: {
+        shotId,
+        imageKey: key,
+        width: body.width ?? 640,
+        height: body.height ?? 360,
+      },
+      update: { imageKey: key, width: body.width ?? 640, height: body.height ?? 360 },
+    });
+  } catch {
+    // The shot was deleted between the lookup and the write — another tab, or
+    // an undo. Drop the orphaned image and say so plainly.
+    await storage.remove(key);
+    return NextResponse.json({ error: "Shot no longer exists." }, { status: 404 });
+  }
 
   return NextResponse.json({ frameUrl: storage.url(key) });
 }

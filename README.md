@@ -106,8 +106,17 @@ idea → script → scene → blocking → camera → shots → edit → notes �
 - Playback across scenes on an A/B roll: two decks alternate, so during a
   dissolve both shots are genuinely live — the outgoing camera keeps moving and
   its actors keep acting while it mixes out. Cuts and fades too.
-- Audio: upload sound onto dialogue, ambience, SFX and music tracks, drag clips
-  against picture, and hear them in sync when you play the cut.
+- Audio on dialogue, ambience, SFX and music tracks, dragged against picture and
+  heard in sync with the cut. Three ways to get sound in:
+  - **Library** — twelve sounds synthesised in your browser from oscillators and
+    noise: room tone, street at night, rain, a clock, a phone buzzing and
+    ringing, knocks, a door, footsteps, a heartbeat, a tension drone, a sting.
+    Nothing is sampled or licensed from anyone, so they are free to use in
+    whatever you make.
+  - **Microphone** — record from any system input, with a device picker and a
+    level meter. Made for scratch dialogue: say the line, cut to it, hear
+    whether the shot is long enough to hold it.
+  - **File** — MP3, WAV, OGG, M4A or WebM from your computer.
 
 **"What if?" versions (Milestone 7)**
 - Try another version copies a scene whole — cast, props, lights, cameras,
@@ -152,12 +161,9 @@ undo / redo · `←` `→` step one frame · `⇧←` `⇧→` previous / next s
 
 ## What is not built yet
 
-Every section of the app now does something real. Two things are deliberately
+Every section of the app now does something real. One thing is deliberately
 absent:
 
-- **No built-in sound library.** Audio is whatever you upload. Shipping a stock
-  library means shipping someone else's copyright, so it waits on a deliberate
-  choice of licence (see below).
 - **No AI features** (Milestone 10): script → shot suggestions, the director's
   assistant, generated voices. The spec puts these last on purpose, and the
   deterministic analysis in Director's Notes covers the ground that does not
@@ -173,7 +179,8 @@ src/
   components/     ui · viewport · inspector · studio · timeline · storyboard ·
                   edit · script · notes · export · project · dashboard ·
                   challenges
-  features/       persistence (autosave) · playback · shots · export · shortcuts
+  features/       persistence (autosave) · playback · shots · audio · export ·
+                  shortcuts
   stores/         project · scene · sequence · selection · viewport · camera ·
                   timeline
   lib/
@@ -182,6 +189,7 @@ src/
     edit/            resolving a list of clips into "what is on screen now"
     script/          screenplay parsing and scene breakdown
     continuity/      pacing, coverage and continuity analysis
+    audio/           — see features/audio for the synthesised sound library
     db/              Prisma client, repository, serializers, demo seed
     storage/         object storage behind an interface (frames, audio)
     rendering/       colour helpers
@@ -196,6 +204,15 @@ field of view, shot distance, camera placement for a shot size, depth of field,
 movement evaluation — lives in `src/lib/cinematography` with no React and no
 three.js imports. The viewport, the inspector and the server-side demo seed all
 call the same functions, so a framing decision means the same thing everywhere.
+
+**The sound library is generated, not sampled.** Every built-in sound is
+synthesised at runtime from oscillators and filtered noise, rendered offline and
+encoded to WAV, then uploaded through exactly the same path as a microphone take
+or a dropped file. That is a licensing decision as much as a technical one:
+almost every "free SFX" licence permits *using* a file in a video but forbids
+*redistributing* it inside another product, which is what bundling a library
+is. Generating them means the library has no copyright surface at all — and for
+previs, a sound only has to mark that something happens.
 
 **Sets and actors are procedural, behind an asset registry.** No GLB files ship
 with this build, so environments, characters and props are assembled from
