@@ -246,14 +246,94 @@ export async function insertScene(scene: SceneDoc): Promise<void> {
   });
 }
 
+/** Which parts of an existing scene a new scene should start from. */
+export interface SceneCarryOver {
+  /** The set itself: environment, location and time of day. */
+  set?: boolean;
+  /** The light rig, including any adjustments made to individual lights. */
+  lighting?: boolean;
+  /** The cast, standing where they stood. */
+  cast?: boolean;
+  /** Props, where they were dressed. */
+  props?: boolean;
+}
+
+export interface AddSceneInput {
+  name?: string;
+  environmentId?: string;
+  location?: string;
+  timeOfDay?: TimeOfDay;
+  /** Scene to carry things over from. */
+  copyFrom?: string;
+  include?: SceneCarryOver;
+}
+
+/**
+ * Creates the next scene in the film, optionally carrying the set, the rig, the
+ * cast and the dressing over from a scene that already exists.
+ *
+ * Everything copied gets fresh ids — two scenes never share a row — but cast
+ * members are referenced, not duplicated: the same actor walks into the next
+ * scene, rather than a second actor with the same name.
+ */
 export async function addScene(
   projectId: string,
-  input: { name?: string; environmentId?: string; location?: string; timeOfDay?: TimeOfDay } = {},
+  input: AddSceneInput = {},
 ): Promise<SceneDoc> {
   const count = await prisma.scene.count({ where: { projectId, parentSceneId: null } });
-  const scene = buildNewScene({ projectId, index: count, ...input });
+  const source =
+    input.copyFrom && input.include && Object.values(input.include).some(Boolean)
+      ? await loadSceneDoc(input.copyFrom, projectId)
+      : null;
+
+  const include = input.include ?? {};
+  const base = buildNewScene({
+    projectId,
+    index: count,
+    name: input.name,
+    location: input.location,
+    timeOfDay: input.timeOfDay,
+    // The set decides the default camera and lighting, so resolve it first.
+    environmentId:
+      input.environmentId ?? (source && include.set ? source.environmentId : undefined),
+    lightingPreset: source && include.lighting ? source.lightingPreset : undefined,
+  });
+
+  const scene: SceneDoc = {
+    ...base,
+    ...(source && include.set
+      ? {
+          location: input.location ?? source.location,
+          timeOfDay: input.timeOfDay ?? source.timeOfDay,
+        }
+      : {}),
+    ...(source && include.lighting
+      ? { lights: source.lights.map((light) => ({ ...light, id: newId("lgt") })) }
+      : {}),
+    ...(source && include.cast
+      ? {
+          characters: source.characters.map((character) => ({
+            ...character,
+            id: newId("sch"),
+          })),
+        }
+      : {}),
+    ...(source && include.props
+      ? { props: source.props.map((prop) => ({ ...prop, id: newId("prp") })) }
+      : {}),
+  };
+
+  // A camera focused on an actor from the old scene would point at nothing.
+  scene.cameras = scene.cameras.map((camera) => ({ ...camera, focusTargetId: null }));
+
   await insertScene(scene);
   return scene;
+}
+
+/** One scene of a project, as a document. */
+async function loadSceneDoc(sceneId: string, projectId: string): Promise<SceneDoc | null> {
+  const project = await getProject(projectId);
+  return project?.scenes.find((scene) => scene.id === sceneId) ?? null;
 }
 
 /**

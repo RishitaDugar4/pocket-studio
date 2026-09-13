@@ -9,6 +9,7 @@ import { SceneTimeline } from "@/components/timeline/SceneTimeline";
 import { AssetBrowser } from "@/components/studio/AssetBrowser";
 import { ShotFilmstrip } from "@/components/storyboard/ShotFilmstrip";
 import { CompareVersions } from "@/components/studio/CompareVersions";
+import { NewSceneMenu, type NewSceneRequest } from "@/components/studio/NewSceneMenu";
 import { VersionBar, rootScenes, versionsOf } from "@/components/studio/VersionBar";
 import { Viewport } from "@/components/viewport/Viewport";
 import { getEnvironment } from "@/data/environments";
@@ -30,6 +31,7 @@ export function SceneBuilder() {
   const scene = useSceneStore((s) => s.scene);
   const [busy, setBusy] = useState(false);
   const [comparing, setComparing] = useState(false);
+  const [creating, setCreating] = useState(false);
   usePlaybackClock();
 
   // Scene previews loop; the cutting room does not, and it turns this off.
@@ -50,7 +52,7 @@ export function SceneBuilder() {
     useSceneStore.getState().loadScene(next);
   };
 
-  const createScene = async () => {
+  const createScene = async (request: NewSceneRequest = {}) => {
     if (!project || busy) return;
     setBusy(true);
     try {
@@ -58,12 +60,14 @@ export function SceneBuilder() {
       const response = await fetch(`/api/projects/${project.id}/scenes`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ environmentId: scene?.environmentId }),
+        body: JSON.stringify(request),
       });
       const { scene: created } = (await response.json()) as { scene: SceneDoc };
       useProjectStore.getState().addScene(created);
       useSceneStore.getState().loadScene(created);
       useSelectionStore.getState().clear();
+      useTimelineStore.getState().stop();
+      setCreating(false);
     } finally {
       setBusy(false);
     }
@@ -79,7 +83,7 @@ export function SceneBuilder() {
         title="No scenes yet"
         body="Every film starts with one scene."
         action={
-          <Button variant="primary" onClick={createScene} disabled={busy}>
+          <Button variant="primary" onClick={() => void createScene()} disabled={busy}>
             + Create scene
           </Button>
         }
@@ -100,7 +104,7 @@ export function SceneBuilder() {
       </div>
 
       <div className="hidden min-h-0 flex-1 flex-col lg:flex">
-        <div className="flex h-10 shrink-0 items-center gap-2 border-b border-ink-800 bg-ink-900 px-3">
+        <div className="relative flex h-10 shrink-0 items-center gap-2 border-b border-ink-800 bg-ink-900 px-3">
           <span className="slate shrink-0 text-fog-300">
             Scene {String(scene.index + 1).padStart(2, "0")}
           </span>
@@ -131,13 +135,29 @@ export function SceneBuilder() {
             ))}
             <button
               type="button"
-              onClick={createScene}
+              onClick={() => setCreating((open) => !open)}
               disabled={busy}
-              className="slate shrink-0 rounded border border-dashed border-ink-600 px-2 py-1 text-fog-400 transition-colors hover:text-amber-film disabled:opacity-40"
+              title="Add a scene, carrying over what you need"
+              className={cn(
+                "slate shrink-0 rounded border border-dashed px-2 py-1 transition-colors disabled:opacity-40",
+                creating
+                  ? "border-amber-dim bg-[#221d14] text-amber-film"
+                  : "border-ink-600 text-fog-400 hover:text-amber-film",
+              )}
             >
               + Scene
             </button>
           </div>
+
+          {creating ? (
+            <NewSceneMenu
+              project={project}
+              currentSceneId={scene.id}
+              busy={busy}
+              onCreate={(request) => void createScene(request)}
+              onClose={() => setCreating(false)}
+            />
+          ) : null}
         </div>
 
         <VersionBar scene={scene} onCompare={() => setComparing(true)} />
