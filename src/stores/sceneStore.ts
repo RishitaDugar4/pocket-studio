@@ -5,6 +5,7 @@ import { getEnvironment } from "@/data/environments";
 import { getCharacterDefinition } from "@/data/characters";
 import { getPropDefinition } from "@/data/props";
 import { lightsForPreset, newId } from "@/lib/db/defaults";
+import type { CarryOver } from "@/components/studio/CarryOverFields";
 import { movementEndTransform } from "@/lib/cinematography";
 import { CAST_COLORS_SERVER as CAST_COLORS } from "@/lib/db/castColors";
 import { useProjectStore } from "./projectStore";
@@ -27,6 +28,15 @@ import type {
 } from "@/types";
 
 const HISTORY_LIMIT = 60;
+
+/** What an import actually did, for telling the director afterwards. */
+export interface ImportResult {
+  cast: number;
+  props: number;
+  skippedCast: number;
+  set: boolean;
+  lighting: boolean;
+}
 
 /** Poses an actor holds standing still; walking somewhere overrides them. */
 const HELD_ACTIONS = new Set(["IDLE", "STAND", "SIT", "LOOK", "TALK", "PHONE", "TURN"]);
@@ -54,6 +64,8 @@ interface SceneState {
   patchScene: (patch: Partial<Pick<SceneDoc, "name" | "location" | "timeOfDay" | "notes" | "versionLabel">>) => void;
   setEnvironment: (environmentId: string) => void;
   setLightingPreset: (presetId: LightingPresetId) => void;
+  /** Brings parts of another scene into this one, as a single undoable step. */
+  importFromScene: (source: SceneDoc, include: CarryOver) => ImportResult;
 
   addCharacter: (input: { definitionId: string; name?: string; position?: Vec3 }) => string;
   updateCharacter: (id: string, patch: Partial<SceneCharacterDoc>, transient?: boolean) => void;
@@ -159,6 +171,54 @@ export const useSceneStore = create<SceneState>((set, get) => ({
         lights: lightsForPreset(presetId),
       })),
     ),
+
+  importFromScene: (source, include) => {
+    const current = get().scene;
+    if (!current) return { cast: 0, props: 0, skippedCast: 0, set: false, lighting: false };
+
+    // An actor already on set is not brought in twice — it is the same person.
+    const present = new Set(current.characters.map((c) => c.characterId));
+    const incomingCast = include.cast
+      ? source.characters.filter((c) => !present.has(c.characterId))
+      : [];
+    const incomingProps = include.props ? source.props : [];
+
+    const result: ImportResult = {
+      cast: incomingCast.length,
+      props: incomingProps.length,
+      skippedCast: include.cast ? source.characters.length - incomingCast.length : 0,
+      set: include.set,
+      lighting: include.lighting,
+    };
+
+    set((s) =>
+      mutate(s, `Bring in from ${source.name}`, (scene) => ({
+        ...scene,
+        // A scene has one set and one rig, so those replace rather than merge.
+        ...(include.set
+          ? {
+              environmentId: source.environmentId,
+              location: source.location,
+              timeOfDay: source.timeOfDay,
+            }
+          : {}),
+        ...(include.lighting
+          ? {
+              lightingPreset: source.lightingPreset,
+              lights: source.lights.map((light) => ({ ...light, id: newId("lgt") })),
+            }
+          : {}),
+        // Cast and props join what is already here.
+        characters: [
+          ...scene.characters,
+          ...incomingCast.map((character) => ({ ...character, id: newId("sch") })),
+        ],
+        props: [...scene.props, ...incomingProps.map((prop) => ({ ...prop, id: newId("prp") }))],
+      })),
+    );
+
+    return result;
+  },
 
   addCharacter: ({ definitionId, name, position }) => {
     const id = newId("sch");

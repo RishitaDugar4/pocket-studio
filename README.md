@@ -90,6 +90,25 @@ Every section of the app does something real. Nothing is a placeholder.
 - **Scene inspector**: name, location, time of day, version label, set, and the
   director's notes for the scene.
 
+### Carrying a set forward
+
+Most scenes in a film are not a fresh start — they are the same room, the same
+people, half an hour later. So the set does not have to be dressed twice.
+
+- **+ Scene** opens a menu: name it, pick any scene in the film to carry over
+  from (alternatives included), and tick what to bring — **set** (room, location
+  and time of day), **lighting** (the rig, including adjustments you made to
+  individual lights), **cast**, **props**. Or carry nothing and start empty.
+- **Bring in…** does the same for a scene that already exists. The consequences
+  differ, and the menu says so before you commit: a scene has one set and one
+  light rig, so those are *replaced*, while cast and props *join* what is
+  already there. An actor already on set is never brought in twice — the menu
+  reads *"Cast — Maya (1 already here)"*.
+- Copies are always new rows, so two scenes never share anything. Cast members
+  are referenced rather than duplicated: the same actor walks into the next
+  scene. Blocking and shots stay with the scene they were made for.
+- Bringing things in is one undoable step.
+
 ## Blocking
 
 - Timed beats per actor on a multi-track scene timeline. Drag a beat to move it,

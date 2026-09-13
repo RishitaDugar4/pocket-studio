@@ -1,26 +1,25 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { Checkbox, Select, TextInput } from "@/components/ui/Inputs";
-import { getEnvironment } from "@/data/environments";
-import { getLightingPreset } from "@/data/lighting";
-import type { ProjectDoc, SceneDoc } from "@/types";
+import { TextInput } from "@/components/ui/Inputs";
+import type { ProjectDoc } from "@/types";
+import {
+  ALL,
+  CarryOverFields,
+  NOTHING,
+  carryOverSummary,
+  nothingSelected,
+  type CarryOver,
+} from "./CarryOverFields";
 
-export interface CarryOver {
-  set: boolean;
-  lighting: boolean;
-  cast: boolean;
-  props: boolean;
-}
+export type { CarryOver };
 
 export interface NewSceneRequest {
   name?: string;
   copyFrom?: string;
   include?: CarryOver;
 }
-
-const NOTHING = "";
 
 /**
  * Starting the next scene (§8).
@@ -46,12 +45,7 @@ export function NewSceneMenu({
   const container = useRef<HTMLDivElement>(null);
   const [name, setName] = useState("");
   const [copyFrom, setCopyFrom] = useState(currentSceneId ?? NOTHING);
-  const [include, setInclude] = useState<CarryOver>({
-    set: true,
-    lighting: true,
-    cast: true,
-    props: true,
-  });
+  const [include, setInclude] = useState<CarryOver>(ALL);
 
   // Clicking away, or Escape, puts the menu back.
   useEffect(() => {
@@ -69,38 +63,8 @@ export function NewSceneMenu({
     };
   }, [onClose]);
 
-  /** Every scene in the film, alternatives included and labelled as such. */
-  const options = useMemo(() => {
-    const roots = project.scenes.filter((scene) => !scene.parentSceneId);
-    const entries: Array<{ value: string; label: string }> = [];
-    for (const root of roots) {
-      const number = String(root.index + 1).padStart(2, "0");
-      entries.push({ value: root.id, label: `Scene ${number} — ${root.name}` });
-      for (const version of project.scenes.filter((s) => s.parentSceneId === root.id)) {
-        entries.push({
-          value: version.id,
-          label: `Scene ${number} · ${version.versionLabel}`,
-        });
-      }
-    }
-    return [{ value: NOTHING, label: "Nothing — start from an empty set" }, ...entries];
-  }, [project.scenes]);
-
-  const source: SceneDoc | undefined = project.scenes.find((scene) => scene.id === copyFrom);
-  const nothingChecked = !include.set && !include.lighting && !include.cast && !include.props;
-
-  const summary = source
-    ? [
-        include.set ? getEnvironment(source.environmentId).name.toLowerCase() : null,
-        include.lighting ? getLightingPreset(source.lightingPreset).name.toLowerCase() : null,
-        include.cast && source.characters.length
-          ? `${source.characters.length} actor${source.characters.length === 1 ? "" : "s"}`
-          : null,
-        include.props && source.props.length
-          ? `${source.props.length} prop${source.props.length === 1 ? "" : "s"}`
-          : null,
-      ].filter(Boolean)
-    : [];
+  const source = project.scenes.find((scene) => scene.id === copyFrom);
+  const summary = carryOverSummary(source, include);
 
   return (
     <div
@@ -126,46 +90,22 @@ export function NewSceneMenu({
         />
       </label>
 
-      <label className="mb-2 block">
-        <span className="mb-1 block text-[11px] text-fog-300">Carry over from</span>
-        <Select value={copyFrom} onChange={setCopyFrom} options={options} />
-      </label>
+      <CarryOverFields
+        project={project}
+        value={copyFrom}
+        include={include}
+        onChange={setCopyFrom}
+        onIncludeChange={setInclude}
+        emptyOptionLabel="Nothing — start from an empty set"
+      />
 
-      {source ? (
-        <>
-          <div className="space-y-0.5 rounded border border-ink-800 bg-ink-900 px-2 py-1.5">
-            <Checkbox
-              label="Set — room, location and time of day"
-              checked={include.set}
-              onChange={(set) => setInclude((current) => ({ ...current, set }))}
-            />
-            <Checkbox
-              label="Lighting — the rig, with your adjustments"
-              checked={include.lighting}
-              onChange={(lighting) => setInclude((current) => ({ ...current, lighting }))}
-            />
-            <Checkbox
-              label={`Cast${source.characters.length ? ` — ${source.characters.map((c) => c.name).join(", ")}` : " — nobody on set"}`}
-              checked={include.cast}
-              onChange={(cast) => setInclude((current) => ({ ...current, cast }))}
-            />
-            <Checkbox
-              label={`Props${source.props.length ? ` — ${source.props.length} in place` : " — none dressed"}`}
-              checked={include.props}
-              onChange={(props) => setInclude((current) => ({ ...current, props }))}
-            />
-          </div>
-          <p className="mt-1.5 text-[10px] leading-relaxed text-fog-400">
-            {nothingChecked
-              ? "Nothing carried over — the new scene starts empty."
-              : `Starts with ${summary.join(", ")}. Blocking and shots stay with the scene they were made in.`}
-          </p>
-        </>
-      ) : (
-        <p className="text-[10px] leading-relaxed text-fog-400">
-          An empty set with a default light rig and one camera.
-        </p>
-      )}
+      <p className="mt-1.5 text-[10px] leading-relaxed text-fog-400">
+        {!source
+          ? "An empty set with a default light rig and one camera."
+          : nothingSelected(include)
+            ? "Nothing carried over — the new scene starts empty."
+            : `Starts with ${summary.join(", ")}. Blocking and shots stay with the scene they were made in.`}
+      </p>
 
       <div className="mt-3 flex gap-2">
         <Button

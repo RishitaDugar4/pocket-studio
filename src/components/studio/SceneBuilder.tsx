@@ -10,6 +10,7 @@ import { AssetBrowser } from "@/components/studio/AssetBrowser";
 import { ShotFilmstrip } from "@/components/storyboard/ShotFilmstrip";
 import { CompareVersions } from "@/components/studio/CompareVersions";
 import { NewSceneMenu, type NewSceneRequest } from "@/components/studio/NewSceneMenu";
+import { ImportSceneMenu } from "@/components/studio/ImportSceneMenu";
 import { VersionBar, rootScenes, versionsOf } from "@/components/studio/VersionBar";
 import { Viewport } from "@/components/viewport/Viewport";
 import { getEnvironment } from "@/data/environments";
@@ -32,6 +33,7 @@ export function SceneBuilder() {
   const [busy, setBusy] = useState(false);
   const [comparing, setComparing] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
   usePlaybackClock();
 
   // Scene previews loop; the cutting room does not, and it turns this off.
@@ -50,6 +52,7 @@ export function SceneBuilder() {
     useSelectionStore.getState().clear();
     useTimelineStore.getState().stop();
     useSceneStore.getState().loadScene(next);
+    setImporting(false);
   };
 
   const createScene = async (request: NewSceneRequest = {}) => {
@@ -116,6 +119,34 @@ export function SceneBuilder() {
             {environment.name} · {scene.timeOfDay.toLowerCase()}
           </span>
 
+          {/* Existing scenes can pull the same things a new scene carries over. */}
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                setImporting((open) => !open);
+                setCreating(false);
+              }}
+              title="Bring the set, lighting, cast or props in from another scene"
+              className={cn(
+                "slate rounded border px-2 py-1 transition-colors duration-150",
+                importing
+                  ? "border-amber-dim bg-[#221d14] text-amber-film"
+                  : "border-ink-700 text-fog-400 hover:text-fog-200",
+              )}
+            >
+              Bring in…
+            </button>
+
+            {importing ? (
+              <ImportSceneMenu
+                project={project}
+                scene={scene}
+                onClose={() => setImporting(false)}
+              />
+            ) : null}
+          </div>
+
           <div className="ml-auto flex min-w-0 items-center gap-1 overflow-x-auto">
             {rootScenes(project).map((item) => (
               <button
@@ -135,7 +166,10 @@ export function SceneBuilder() {
             ))}
             <button
               type="button"
-              onClick={() => setCreating((open) => !open)}
+              onClick={() => {
+                setCreating((open) => !open);
+                setImporting(false);
+              }}
               disabled={busy}
               title="Add a scene, carrying over what you need"
               className={cn(
