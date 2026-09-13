@@ -64,8 +64,11 @@ export function CameraHelper({ visible, selected }: { visible: boolean; selected
         <cylinderGeometry args={[0.055, 0.055, 0.2, 12]} />
         <meshStandardMaterial color="#2a2e33" roughness={0.6} />
       </mesh>
+      {/* Lines raycast with a one-metre threshold by default, so a frustum
+          drawn across the set would swallow clicks meant for anything near it.
+          The body is the camera's click target; these are just drawn. */}
       <group ref={frustum}>
-        <lineSegments geometry={lineGeometry}>
+        <lineSegments geometry={lineGeometry} raycast={() => null}>
           <lineBasicMaterial color={color} transparent opacity={selected ? 0.8 : 0.42} />
         </lineSegments>
       </group>
@@ -73,7 +76,7 @@ export function CameraHelper({ visible, selected }: { visible: boolean; selected
   );
 }
 
-/** Subtle floor ring + corner ticks. Never a hard outline (§38). */
+/** A hover hint under an object that is not selected — never a click target. */
 export function SelectionMarker({
   radius,
   height,
@@ -85,16 +88,15 @@ export function SelectionMarker({
 }) {
   return (
     <group>
-      <mesh position={[0, 0.012, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh position={[0, 0.012, 0]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
         <ringGeometry args={[radius * 0.96, radius, 40]} />
         <meshBasicMaterial color={color} transparent opacity={0.55} side={THREE.DoubleSide} />
       </mesh>
-      <mesh position={[0, 0.014, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh position={[0, 0.014, 0]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
         <circleGeometry args={[radius * 0.96, 32]} />
         <meshBasicMaterial color={color} transparent opacity={0.07} side={THREE.DoubleSide} />
       </mesh>
-      {/* A faint vertical line to read height against the set. */}
-      <mesh position={[0, height / 2, 0]}>
+      <mesh position={[0, height / 2, 0]} raycast={() => null}>
         <boxGeometry args={[0.004, height, 0.004]} />
         <meshBasicMaterial color={color} transparent opacity={0.22} />
       </mesh>

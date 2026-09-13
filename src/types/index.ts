@@ -54,7 +54,10 @@ export type CameraHeight = (typeof CAMERA_HEIGHTS)[number];
 
 export const CAMERA_MOVEMENTS = [
   "STATIC",
+  // "PAN" is a pan to the right; it predates the left/right pair and is kept
+  // as-is so shots already recorded with it keep working.
   "PAN",
+  "PAN_LEFT",
   "TILT",
   "PUSH_IN",
   "PULL_OUT",

@@ -11,7 +11,8 @@ export interface MovementSpec {
 
 export const MOVEMENT_SPECS: MovementSpec[] = [
   { id: "STATIC", label: "Static", description: "Locked off. The frame does the work.", continuous: false },
-  { id: "PAN", label: "Pan", description: "Camera pivots horizontally.", continuous: false },
+  { id: "PAN", label: "Pan right", description: "Camera pivots right on its axis.", continuous: false },
+  { id: "PAN_LEFT", label: "Pan left", description: "Camera pivots left on its axis.", continuous: false },
   { id: "TILT", label: "Tilt", description: "Camera pivots vertically.", continuous: false },
   { id: "PUSH_IN", label: "Push In", description: "Camera moves toward the subject.", continuous: false },
   { id: "PULL_OUT", label: "Pull Out", description: "Camera retreats, revealing context.", continuous: false },
@@ -77,8 +78,11 @@ export function evaluateMovement(
   const distance = Math.max(v.distance(target, position), 0.2);
 
   switch (type) {
-    case "PAN": {
-      const angle = 0.44 * scale * eased;
+    case "PAN":
+    case "PAN_LEFT": {
+      // Rotating the aim point around the camera: positive swings it right.
+      const direction = type === "PAN_LEFT" ? -1 : 1;
+      const angle = 0.44 * scale * eased * direction;
       return { position, target: rotateAroundY(target, position, angle), roll: 0 };
     }
     case "TILT": {

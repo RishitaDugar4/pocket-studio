@@ -44,7 +44,10 @@ interface ViewportState {
 
 export const useViewportStore = create<ViewportState>((set) => ({
   mode: "ORBIT",
-  transformMode: "translate",
+  // Select is the default tool: objects are moved by dragging the ring under
+  // them, which is a floor-plan action and needs no gizmo in the way. The
+  // axis gizmos are there when a move has to be constrained or vertical.
+  transformMode: "select",
   guides: {
     thirds: true,
     center: false,

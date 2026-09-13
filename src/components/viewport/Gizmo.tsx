@@ -3,12 +3,11 @@
 import { useEffect, useRef } from "react";
 import { TransformControls } from "@react-three/drei";
 import type * as THREE from "three";
-import { beatsFor } from "@/lib/animation";
+import { applyObjectTransform } from "@/features/scene/applyTransform";
 import { useSceneStore } from "@/stores/sceneStore";
 import { useSelectionStore } from "@/stores/selectionStore";
-import { useTimelineStore } from "@/stores/timelineStore";
 import { useViewportStore } from "@/stores/viewportStore";
-import type { Selection, Vec3 } from "@/types";
+import type { Selection } from "@/types";
 import { objectKey, useObjectRegistry } from "./objectRegistry";
 
 /**
@@ -22,31 +21,11 @@ export function Gizmo({ selection }: { selection: Selection }) {
   const dragging = useRef(false);
 
   const write = (target: THREE.Object3D) => {
-    const store = useSceneStore.getState();
-    const position: Vec3 = [target.position.x, target.position.y, target.position.z];
-    const rotation: Vec3 = [target.rotation.x, target.rotation.y, target.rotation.z];
-    const scale = Math.max(target.scale.x, 0.2);
-
-    if (selection.kind === "character") {
-      const beatId = useSelectionStore.getState().selectedBeatId;
-      const beats = store.scene ? beatsFor(store.scene, selection.id) : [];
-      const beat = beats.find((b) => b.id === beatId);
-
-      if (beat) {
-        // Editing a beat moves where the actor ends up, not where they start.
-        // The store decides whether that turns the beat into a walk.
-        store.updateBeat(beat.id, { endPosition: position, rotation }, true);
-      } else if (beats.length === 0 || useTimelineStore.getState().currentTime === 0) {
-        // Characters keep a uniform scale: an actor is a person, not a prop.
-        store.updateCharacter(selection.id, { position, rotation, scale: clampScale(scale) }, true);
-      }
-    } else if (selection.kind === "prop") {
-      store.updateProp(selection.id, { position, rotation, scale: clampScale(scale) }, true);
-    } else if (selection.kind === "light") {
-      store.updateLight(selection.id, { position }, true);
-    } else if (selection.kind === "camera") {
-      store.updateCamera(selection.id, { position }, true);
-    }
+    applyObjectTransform(selection, {
+      position: [target.position.x, target.position.y, target.position.z],
+      rotation: [target.rotation.x, target.rotation.y, target.rotation.z],
+      scale: Math.max(target.scale.x, 0.2),
+    });
   };
 
   useEffect(() => {
@@ -86,10 +65,6 @@ export function Gizmo({ selection }: { selection: Selection }) {
       }}
     />
   );
-}
-
-function clampScale(value: number) {
-  return Math.min(Math.max(value, 0.4), 2.5);
 }
 
 /** Clears the selection when the user clicks empty space. */

@@ -14,7 +14,10 @@ import { CharacterFigure } from "./CharacterFigure";
 import { PropModel } from "./PropModel";
 import { SceneLights } from "./SceneLights";
 import { CameraHelper, LightHelper, SelectionMarker } from "./CameraHelper";
+import { applyObjectTransform, canMoveCharacter } from "@/features/scene/applyTransform";
+import { useSceneStore } from "@/stores/sceneStore";
 import { BlockingMotion, useLivePose } from "./BlockingMotion";
+import { DragRing } from "./DragRing";
 import { EnvironmentSet } from "./sets/EnvironmentSet";
 import { DeselectOnBackground } from "./Gizmo";
 import { objectKey, useObjectRegistry } from "./objectRegistry";
@@ -84,12 +87,20 @@ function SelectableCharacter({
         highlight={selected ? 1 : hovered ? 0.4 : 0}
         seed={phaseSeed(character.id)}
       />
-      {selected || hovered ? (
-        <SelectionMarker
+      {selected ? (
+        <DragRing
           radius={0.42}
           height={definition.build.height}
-          color={selected ? "#d8ab4f" : "#6c7277"}
+          position={character.position}
+          draggable={interactive && canMoveCharacter(character.id)}
+          onDragStart={() => useSceneStore.getState().beginInteraction("Move actor")}
+          onDrag={(next) =>
+            applyObjectTransform({ kind: "character", id: character.id }, { position: next })
+          }
+          onDragEnd={() => useSceneStore.getState().endInteraction()}
         />
+      ) : hovered ? (
+        <SelectionMarker radius={0.42} height={definition.build.height} color="#6c7277" />
       ) : null}
     </group>
   );
@@ -129,11 +140,21 @@ function SelectableProp({
       onPointerOut={interactive ? () => setHovered(null) : undefined}
     >
       <PropModel definitionId={prop.definitionId} />
-      {selected || hovered ? (
+      {selected ? (
+        <DragRing
+          radius={Math.max(definition.size[0], definition.size[2]) * 0.75 + 0.1}
+          height={definition.size[1]}
+          position={prop.position}
+          draggable={interactive}
+          onDragStart={() => useSceneStore.getState().beginInteraction("Move prop")}
+          onDrag={(next) => applyObjectTransform({ kind: "prop", id: prop.id }, { position: next })}
+          onDragEnd={() => useSceneStore.getState().endInteraction()}
+        />
+      ) : hovered ? (
         <SelectionMarker
           radius={Math.max(definition.size[0], definition.size[2]) * 0.75 + 0.1}
           height={definition.size[1]}
-          color={selected ? "#d8ab4f" : "#6c7277"}
+          color="#6c7277"
         />
       ) : null}
     </group>

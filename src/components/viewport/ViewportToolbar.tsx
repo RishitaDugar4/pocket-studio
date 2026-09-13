@@ -12,7 +12,7 @@ import type { GuideSettings, TransformMode } from "@/types";
 const TOOLS: Array<{ mode: TransformMode; label: string; key: string; icon: React.ReactNode }> = [
   {
     mode: "select",
-    label: "Select",
+    label: "Select · drag the ring to move",
     key: "1",
     icon: (
       <svg viewBox="0 0 14 14" className="h-3.5 w-3.5 fill-current">
@@ -22,7 +22,7 @@ const TOOLS: Array<{ mode: TransformMode; label: string; key: string; icon: Reac
   },
   {
     mode: "translate",
-    label: "Move",
+    label: "Move on an axis",
     key: "2",
     icon: (
       <svg viewBox="0 0 14 14" className="h-3.5 w-3.5 stroke-current" strokeWidth={1.2} fill="none">

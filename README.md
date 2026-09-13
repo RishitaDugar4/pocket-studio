@@ -83,8 +83,12 @@ Every section of the app does something real. Nothing is a placeholder.
   stylized actors** and **ten props**, all registry-driven.
 - Drag from the browser onto the floor to place exactly, or click to drop on an
   open standing mark. Small props land on a table if one is under them.
-- Select and move, rotate or scale with gizmos or numeric scrubbers. Undo and
-  redo, with a whole drag counting as a single step.
+- **Moving things is a floor-plan operation.** Click an actor or a prop and a
+  ring appears under it; drag the ring and it slides across the floor, keeping
+  its height — a cup stays on the table it was resting on. The axis gizmos are
+  still there on `2` / `3` / `4` for constrained or vertical moves, and the
+  inspector has numeric fields.
+- Undo and redo, with a whole drag counting as a single step.
 - An eight-pose vocabulary per actor — idle, walk, sit, stand, turn, look, talk,
   phone — easing between poses rather than snapping.
 - **Scene inspector**: name, location, time of day, version label, set, and the
@@ -127,9 +131,9 @@ people, half an hour later. So the set does not have to be dressed twice.
   subject, including seated actors, who need the aim point dropped but not the
   coverage. A live readout tells you what the frame is *actually* reading as.
 - **Heights** — ground, waist, chest, eye, high, overhead.
-- **Movement** — static, pan, tilt, push in, pull out, truck left/right,
-  pedestal, orbit, handheld — previewed on a scrubbable clock. Handheld is
-  controlled drift, not random shake.
+- **Movement** — static, pan left/right, tilt, push in, pull out, truck
+  left/right, pedestal, orbit, handheld — previewed on a scrubbable clock.
+  Handheld is controlled drift, not random shake.
 - **Depth of field** with real optics behind it: pick a stop and a focus target
   and the panel shows the true near and far limits and the hyperfocal distance.
 - Multiple cameras per scene, switchable and independently rigged.
@@ -228,7 +232,7 @@ and continuity warnings needed somewhere to live.
 | --- | --- |
 | `Space` | Play / pause |
 | `K` | Capture shot |
-| `1` `2` `3` `4` | Select · move · rotate · scale |
+| `1` `2` `3` `4` | Select (drag the ring) · move on an axis · rotate · scale |
 | `F` | Frame the selection |
 | `Delete` | Remove the selected beat, or the selected object |
 | `⌘Z` / `Ctrl+Z` | Undo |
