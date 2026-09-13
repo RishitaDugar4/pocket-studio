@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button, ToolButton } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/Panel";
 import { NumberScrub, Select } from "@/components/ui/Inputs";
@@ -29,7 +29,10 @@ export function EditSuite() {
   const project = useProjectStore((s) => s.project);
   const activeScene = useSceneStore((s) => s.scene);
   const router = useRouter();
+  const params = useSearchParams();
   const aspect = aspectValue(useViewportStore((s) => s.aspectId));
+  const autoplay = params.get("play") === "1";
+  const startedRef = useRef(false);
   usePlaybackClock();
 
   const isPlaying = useTimelineStore((s) => s.isPlaying);
@@ -62,6 +65,30 @@ export function EditSuite() {
     setDuration(Math.max(duration, 0.5));
   }, [duration, setDuration, setLoop]);
 
+  /**
+   * Arriving from a "Play film" button: run the cut from the top, once.
+   *
+   * The start is scheduled for the next frame and cancelled if this effect is
+   * torn down first. That matters because leaving this page stops the clock —
+   * so a start issued *during* a mount that is immediately unwound (a remount,
+   * or StrictMode in development) would be silently cancelled by that cleanup.
+   * Scheduling it means the start always lands after the last teardown.
+   */
+  useEffect(() => {
+    if (!autoplay || startedRef.current || !project || duration <= 0) return;
+    const frame = requestAnimationFrame(() => {
+      startedRef.current = true;
+      // Drop the flag so a later refresh does not replay the film unasked;
+      // history rather than the router, which would re-suspend the page.
+      window.history.replaceState(null, "", `/studio/${project.id}/edit`);
+      const timeline = useTimelineStore.getState();
+      timeline.setTime(0);
+      timeline.play();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [autoplay, project, duration]);
+
+  // Leaving the cutting room should not leave the clock running.
   // Leaving the cutting room should not leave the clock running.
   useEffect(() => () => useTimelineStore.getState().stop(), []);
 

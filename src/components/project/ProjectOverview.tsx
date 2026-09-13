@@ -30,6 +30,14 @@ const MOOD_LABELS: Record<VisualMood, string> = {
   MINIMAL: "Minimal",
 };
 
+function PlayGlyph() {
+  return (
+    <svg viewBox="0 0 12 12" className="h-2.5 w-2.5 fill-current" aria-hidden>
+      <path d="M2.5 1.5 L10 6 L2.5 10.5 Z" />
+    </svg>
+  );
+}
+
 export function ProjectOverview() {
   const project = useProjectStore((s) => s.project);
   const patchProject = useProjectStore((s) => s.patchProject);
@@ -116,8 +124,21 @@ export function ProjectOverview() {
               ))}
             </dl>
 
+            {/* Watching the film is the point, so when there is one to watch
+                it is the button that leads. */}
+            {shots > 0 ? (
+              <Button
+                variant="primary"
+                className="w-full"
+                onClick={() => router.push(`/studio/${project.id}/edit?play=1`)}
+              >
+                <PlayGlyph />
+                Play film
+              </Button>
+            ) : null}
+
             <Button
-              variant="primary"
+              variant={shots > 0 ? "outline" : "primary"}
               className="w-full"
               onClick={() => router.push(`/studio/${project.id}/scenes`)}
             >

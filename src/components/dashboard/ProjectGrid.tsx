@@ -63,12 +63,15 @@ export function ProjectGrid({ projects }: { projects: ProjectSummary[] }) {
         const gradient = environment?.thumbnail ?? "linear-gradient(150deg,#22252a,#0e1012)";
         const { label, step } = stage(project);
         return (
-          <Link
+          // The card is a link and so is Play, so they sit side by side rather
+          // than nested — an anchor inside an anchor is neither valid nor
+          // reachable by keyboard.
+          <article
             key={project.id}
-            href={`/studio/${project.id}`}
-            className="animate-fade-up group overflow-hidden rounded-md border border-ink-800 bg-ink-850 transition-colors duration-200 hover:border-ink-600"
+            className="animate-fade-up group relative overflow-hidden rounded-md border border-ink-800 bg-ink-850 transition-colors duration-200 hover:border-ink-600"
             style={{ animationDelay: `${index * 40}ms` }}
           >
+            <Link href={`/studio/${project.id}`} className="block">
             <div
               className="relative h-36 w-full overflow-hidden"
               style={{ background: gradient }}
@@ -116,7 +119,21 @@ export function ProjectGrid({ projects }: { projects: ProjectSummary[] }) {
               </div>
               <p className="slate mt-2">Edited {editedLabel(project.updatedAt)}</p>
             </div>
-          </Link>
+            </Link>
+
+            {project.shotCount > 0 ? (
+              <Link
+                href={`/studio/${project.id}/edit?play=1`}
+                title={`Play ${project.title}`}
+                className="absolute right-3 top-3 flex h-8 items-center gap-1.5 rounded-full border border-ink-600 bg-ink-950/80 pl-2.5 pr-3 text-fog-100 backdrop-blur-sm transition-colors hover:border-amber-dim hover:bg-ink-950 hover:text-amber-film"
+              >
+                <svg viewBox="0 0 12 12" className="h-2.5 w-2.5 fill-current" aria-hidden>
+                  <path d="M2.5 1.5 L10 6 L2.5 10.5 Z" />
+                </svg>
+                <span className="slate">Play</span>
+              </Link>
+            ) : null}
+          </article>
         );
       })}
     </div>

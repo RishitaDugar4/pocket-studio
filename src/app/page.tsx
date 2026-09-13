@@ -41,10 +41,9 @@ export default async function DashboardPage() {
 
         <footer className="mt-14 border-t border-ink-800 pt-5">
           <p className="text-[11px] leading-relaxed text-fog-400">
-            Working today: the 3D scene builder, blocking by hand, the camera system — lenses, shot
-            sizes, heights, movement, depth of field — lighting rigs, composition guides and
-            autosave. Shot capture, storyboard, editing and export are not built yet and say so
-            where they live.
+            Script to screen: write it, build the set, block the actors, work the camera — lenses,
+            shot sizes, heights, movement, depth of field — capture shots, cut them together with
+            sound, read your director&apos;s notes, and export the previs. Everything saves itself.
           </p>
         </footer>
       </div>
