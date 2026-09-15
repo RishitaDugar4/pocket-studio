@@ -1,11 +1,18 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { prisma } from "@/lib/db/prisma";
 
 /**
  * Object storage, kept behind an interface so nothing in the app knows where
- * bytes actually live (§Storage). The local-disk provider is what runs in
- * development; an S3/R2 provider implements the same three methods.
+ * bytes actually live (§Storage).
+ *
+ * Bytes are kept in the database. The application is deployed to a serverless
+ * platform whose filesystem is read-only outside /tmp and is thrown away
+ * between invocations, so writing files next to the code does not survive — and
+ * would fail outright in production. Using the database the app already has
+ * keeps deployment to one managed service; an S3/R2/Blob provider implements
+ * the same four methods when the volume justifies it.
  */
 export interface StoredObject {
   key: string;
@@ -21,7 +28,8 @@ export interface StorageProvider {
   url(key: string): string;
 }
 
-const ROOT = path.join(process.cwd(), ".storage");
+/** Where the pre-database local provider wrote its files, for reading back. */
+const LEGACY_ROOT = path.join(process.cwd(), ".storage");
 
 /** Keys are app-generated, but never trust one enough to escape the root. */
 function safePath(key: string): string {
@@ -29,8 +37,8 @@ function safePath(key: string): string {
     .normalize(key)
     .replace(/^(\.\.(\/|\\|$))+/, "")
     .replace(/^[/\\]+/, "");
-  const resolved = path.resolve(ROOT, normalised);
-  if (!resolved.startsWith(ROOT)) throw new Error("Invalid storage key");
+  const resolved = path.resolve(LEGACY_ROOT, normalised);
+  if (!resolved.startsWith(LEGACY_ROOT)) throw new Error("Invalid storage key");
   return resolved;
 }
 
@@ -57,15 +65,26 @@ export function contentTypeFor(key: string): string {
   return match?.[0] ?? "application/octet-stream";
 }
 
-class LocalDiskStorage implements StorageProvider {
+class DatabaseStorage implements StorageProvider {
   async put(key: string, data: Buffer, contentType: string): Promise<StoredObject> {
-    const target = safePath(key);
-    await mkdir(path.dirname(target), { recursive: true });
-    await writeFile(target, data);
-    return { key, contentType, size: data.byteLength };
+    const size = data.byteLength;
+    // Prisma maps Bytes to Uint8Array; Buffer is one, but not the same generic.
+    const bytes = new Uint8Array(data);
+    await prisma.storedAsset.upsert({
+      where: { key },
+      create: { key, contentType, size, data: bytes },
+      update: { contentType, size, data: bytes },
+    });
+    return { key, contentType, size };
   }
 
   async get(key: string): Promise<{ data: Buffer; contentType: string } | null> {
+    const row = await prisma.storedAsset.findUnique({ where: { key } });
+    if (row) return { data: Buffer.from(row.data), contentType: row.contentType };
+
+    // Assets written by the earlier local-disk provider are still readable in a
+    // development checkout, so an existing storyboard does not go blank after
+    // the switch. There is no such directory in production.
     try {
       const data = await readFile(safePath(key));
       return { data, contentType: contentTypeFor(key) };
@@ -75,11 +94,7 @@ class LocalDiskStorage implements StorageProvider {
   }
 
   async remove(key: string): Promise<void> {
-    try {
-      await unlink(safePath(key));
-    } catch {
-      // Deleting something that is already gone is not an error.
-    }
+    await prisma.storedAsset.deleteMany({ where: { key } });
   }
 
   url(key: string): string {
@@ -87,7 +102,7 @@ class LocalDiskStorage implements StorageProvider {
   }
 }
 
-export const storage: StorageProvider = new LocalDiskStorage();
+export const storage: StorageProvider = new DatabaseStorage();
 
 /** Decodes a `data:` URL produced by the viewport's frame grab. */
 export function decodeDataUrl(dataUrl: string): { data: Buffer; contentType: string } | null {

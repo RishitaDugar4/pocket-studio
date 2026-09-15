@@ -31,11 +31,48 @@ within seconds of arriving.
 | `npm run build` | Production build (runs the type checker) |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | ESLint |
-| `npm run db:migrate` | Apply / create Prisma migrations |
+| `npm run db:migrate` | Create / apply migrations in development |
+| `npm run db:deploy` | Apply existing migrations (never resets) |
 | `npm run db:studio` | Browse the database |
 
 Desktop-first: the Scene Builder needs a laptop-sized screen and says so on
 anything smaller. Everything else reads fine on a narrow window.
+
+---
+
+## Deploying
+
+The app needs one thing from its host: a PostgreSQL connection string in
+`DATABASE_URL`. Nothing else is required, and nothing is written to disk.
+
+**Build.** Vercel runs `vercel-build` when it exists, so the deployment does its
+own database work and never depends on anyone's laptop:
+
+```
+prisma generate && node scripts/migrate-deploy.mjs && next build
+```
+
+Leave the Build Command blank in project settings, or this script is bypassed.
+
+**Environment variables.** Set these for the environment you deploy (they are
+then available at build time as well as at runtime):
+
+| Variable | Required | Notes |
+| --- | --- | --- |
+| `DATABASE_URL` | yes | Pooled connection string. Managed Postgres usually needs `?sslmode=require`. |
+| `DIRECT_URL` | no | Unpooled connection, used only for migrations. Neon's Vercel integration also exposes `DATABASE_URL_UNPOOLED` and `POSTGRES_URL_NON_POOLING`, either of which is picked up automatically. |
+| `POCKET_STUDIO_MAX_AUDIO_MB` | no | Defaults to 4, which fits inside a serverless request body limit. |
+
+Migrations take advisory locks and issue DDL, which transaction-mode connection
+poolers do not reliably support — hence the direct connection when one exists.
+`scripts/migrate-deploy.mjs` picks between those variables and fails loudly if
+none is set. It never invents a connection string.
+
+**Build time versus runtime.** `next build` never touches the database: the
+dashboard and every route that reads data is dynamic, and the only static pages
+are the challenge list and the new-film flow. The build has been verified to
+succeed with no `DATABASE_URL` present at all. The single build step that does
+need the database is `migrate deploy`.
 
 ---
 

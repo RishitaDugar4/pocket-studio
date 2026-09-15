@@ -421,6 +421,25 @@ export async function ensureDemoProject(): Promise<void> {
   const existing = await prisma.project.findFirst({ where: { userId, isDemo: true } });
   if (existing) return;
 
+  // Two cold requests can arrive at an empty database at the same moment. The
+  // loser of that race would otherwise seed a second copy of the demo film.
+  const lock = await prisma.$queryRaw<Array<{ locked: boolean }>>`
+    SELECT pg_try_advisory_lock(hashtext('pocket-studio:demo-seed')) AS locked
+  `;
+  if (!lock[0]?.locked) return;
+
+  try {
+    await seedDemoProject(userId);
+  } finally {
+    await prisma.$queryRaw`SELECT pg_advisory_unlock(hashtext('pocket-studio:demo-seed'))`;
+  }
+}
+
+async function seedDemoProject(userId: string): Promise<void> {
+  // Re-check inside the lock: the request that held it may have just finished.
+  const existing = await prisma.project.findFirst({ where: { userId, isDemo: true } });
+  if (existing) return;
+
   const project = await prisma.project.create({
     data: {
       userId,

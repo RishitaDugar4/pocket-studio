@@ -2,13 +2,26 @@ import Link from "next/link";
 import { ProjectGrid } from "@/components/dashboard/ProjectGrid";
 import { listProjects } from "@/lib/db/projects";
 import { ensureDemoProject } from "@/lib/db/demo";
+import type { ProjectSummary } from "@/types";
 
+// The dashboard reads the database on every request, so it is never prerendered
+// and never needs a database connection at build time.
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  // The demo film must be there on first launch (§42).
-  await ensureDemoProject();
-  const projects = await listProjects();
+  let projects: ProjectSummary[] = [];
+  let unreachable = false;
+
+  try {
+    // The demo film must be there on first launch (§42).
+    await ensureDemoProject();
+    projects = await listProjects();
+  } catch (error) {
+    // A database that is missing, unmigrated or unreachable should say so on
+    // the page rather than becoming an opaque 500.
+    console.error("Could not load projects", error);
+    unreachable = true;
+  }
 
   return (
     <div className="min-h-dvh">
@@ -36,7 +49,19 @@ export default async function DashboardPage() {
 
         <section className="mt-10">
           <h2 className="slate mb-3">Recent films</h2>
-          <ProjectGrid projects={projects} />
+          {unreachable ? (
+            <div className="panel px-6 py-10 text-center">
+              <p className="slate text-alert">Cannot reach the database</p>
+              <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-fog-400">
+                Pocket Studio keeps every film in PostgreSQL. Check that{" "}
+                <span className="numeric text-fog-200">DATABASE_URL</span> is set for this
+                environment and that the migrations have been applied. The server log has the
+                underlying error.
+              </p>
+            </div>
+          ) : (
+            <ProjectGrid projects={projects} />
+          )}
         </section>
 
         <footer className="mt-14 border-t border-ink-800 pt-5">

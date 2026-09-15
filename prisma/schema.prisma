@@ -20,15 +20,15 @@ model User {
 }
 
 model Project {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   title     String
-  format    String   @default("SHORT_FILM")
-  mood      String   @default("NATURALISTIC")
+  format    String  @default("SHORT_FILM")
+  mood      String  @default("NATURALISTIC")
   genre     String?
   logline   String?
-  status    String   @default("IN_PROGRESS")
-  isDemo    Boolean  @default(false)
-  script    String   @default("")
+  status    String  @default("IN_PROGRESS")
+  isDemo    Boolean @default(false)
+  script    String  @default("")
   thumbnail String?
 
   challengeSlug String?
@@ -39,11 +39,11 @@ model Project {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  scenes     Scene[]
-  cast       Character[]
-  timeline   TimelineItem[]
-  audio      AudioAsset[]
-  versions   ProjectVersion[]
+  scenes   Scene[]
+  cast     Character[]
+  timeline TimelineItem[]
+  audio    AudioAsset[]
+  versions ProjectVersion[]
 
   @@index([userId])
 }
@@ -52,15 +52,15 @@ model Project {
 /// floor, lights, cameras, and the shots captured from them.
 /// Alternate directorial takes are Scenes with `parentSceneId` set.
 model Scene {
-  id             String  @id @default(cuid())
+  id             String @id @default(cuid())
   index          Int
   name           String
-  location       String  @default("")
-  timeOfDay      String  @default("DAY")
-  environmentId  String  @default("apartment")
-  lightingPreset String  @default("WARM_INTERIOR")
-  versionLabel   String  @default("Original")
-  notes          String  @default("")
+  location       String @default("")
+  timeOfDay      String @default("DAY")
+  environmentId  String @default("apartment")
+  lightingPreset String @default("WARM_INTERIOR")
+  versionLabel   String @default("Original")
+  notes          String @default("")
 
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -99,11 +99,11 @@ model Character {
 
 /// Placement of a cast member inside one scene (blocking start state).
 model SceneCharacter {
-  id        String @id @default(cuid())
+  id        String  @id @default(cuid())
   position  Json
   rotation  Json
-  scale     Float  @default(1)
-  animation String @default("IDLE")
+  scale     Float   @default(1)
+  animation String  @default("IDLE")
   locked    Boolean @default(false)
 
   sceneId String
@@ -249,13 +249,13 @@ model StoryboardFrame {
 }
 
 model TimelineItem {
-  id       String @id @default(cuid())
-  index    Int
-  track    String @default("VIDEO")
-  startTime Float @default(0)
-  duration Float  @default(4)
-  trimIn   Float  @default(0)
-  trimOut  Float  @default(0)
+  id         String @id @default(cuid())
+  index      Int
+  track      String @default("VIDEO")
+  startTime  Float  @default(0)
+  duration   Float  @default(4)
+  trimIn     Float  @default(0)
+  trimOut    Float  @default(0)
   transition String @default("CUT")
 
   projectId String
@@ -271,11 +271,11 @@ model TimelineItem {
 }
 
 model AudioAsset {
-  id       String @id @default(cuid())
-  name     String
-  kind     String @default("SFX")
+  id         String @id @default(cuid())
+  name       String
+  kind       String @default("SFX")
   storageKey String
-  duration Float  @default(0)
+  duration   Float  @default(0)
 
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -295,6 +295,22 @@ model ProjectVersion {
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
+}
+
+/// Binary assets — storyboard frames, uploaded and recorded audio.
+///
+/// These live in the database rather than on disk because the application runs
+/// on a serverless platform, where the filesystem is read-only outside /tmp and
+/// is discarded between invocations. The StorageProvider interface in
+/// src/lib/storage keeps this swappable for object storage later.
+model StoredAsset {
+  key         String   @id
+  contentType String
+  size        Int
+  data        Bytes
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
 }
 
 model Challenge {
