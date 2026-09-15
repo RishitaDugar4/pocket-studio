@@ -54,19 +54,27 @@ prisma generate && node scripts/migrate-deploy.mjs && next build
 
 Leave the Build Command blank in project settings, or this script is bypassed.
 
-**Environment variables.** Set these for the environment you deploy (they are
-then available at build time as well as at runtime):
+**Environment variables.** A variable is only visible to a build if it is set
+for *that* environment — Production and Preview are configured separately, and
+this is the usual reason a build cannot see a database.
 
 | Variable | Required | Notes |
 | --- | --- | --- |
-| `DATABASE_URL` | yes | Pooled connection string. Managed Postgres usually needs `?sslmode=require`. |
-| `DIRECT_URL` | no | Unpooled connection, used only for migrations. Neon's Vercel integration also exposes `DATABASE_URL_UNPOOLED` and `POSTGRES_URL_NON_POOLING`, either of which is picked up automatically. |
+| `DATABASE_URL` | preferred | Pooled connection string. Managed Postgres usually needs `?sslmode=require`. |
+| `DIRECT_URL` | no | Unpooled connection, used only for migrations. |
 | `POCKET_STUDIO_MAX_AUDIO_MB` | no | Defaults to 4, which fits inside a serverless request body limit. |
 
-Migrations take advisory locks and issue DDL, which transaction-mode connection
-poolers do not reliably support — hence the direct connection when one exists.
-`scripts/migrate-deploy.mjs` picks between those variables and fails loudly if
-none is set. It never invents a connection string.
+If Postgres is attached through a platform integration, none of these need to be
+set by hand: the app reads whatever the integration publishes — Vercel's Neon
+integration creates a `STORAGE_*` set — preferring a pooled connection for
+queries and a direct one for migrations. Using the integration's own variables
+means the credentials it rotates are the ones in use, rather than a copy that
+goes stale. The orders are listed in `src/lib/db/connection.ts` and
+`scripts/migrate-deploy.mjs`; neither ever invents or logs a connection string.
+
+When no database can be resolved, the dashboard says so plainly instead of
+returning a 500, and the build prints the *names* of the connection-related
+variables it could see.
 
 **Build time versus runtime.** `next build` never touches the database: the
 dashboard and every route that reads data is dynamic, and the only static pages

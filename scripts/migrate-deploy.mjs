@@ -2,18 +2,17 @@
 /**
  * Applies pending Prisma migrations to the deployment's own database.
  *
- * This runs as part of the build so that production schema changes never depend
- * on someone running a command from a laptop.
+ * This runs during the build so that production schema changes never depend on
+ * someone running a command from a laptop. `prisma migrate deploy` only applies
+ * migrations that are already committed, never generates or resets anything, so
+ * it is safe to run on every deployment and is a no-op once they are applied.
  *
- * Two details matter on a pooled Postgres (Neon's default connection string is
- * pooled through PgBouncer):
+ * Migrations take advisory locks and issue DDL, which transaction-mode poolers
+ * (Neon's default connection string is pooled through PgBouncer) do not reliably
+ * support — so a DIRECT connection is preferred here, the opposite of what the
+ * application wants. See src/lib/db/connection.ts for the application's order.
  *
- *   - Migrations take advisory locks and issue DDL, which transaction-mode
- *     pooling does not reliably support, so a direct (unpooled) connection is
- *     preferred when the platform provides one. Neon's Vercel integration
- *     exposes it as DATABASE_URL_UNPOOLED / POSTGRES_URL_NON_POOLING.
- *   - Nothing here invents a connection string. If none of these variables is
- *     set, the build fails loudly rather than deploying against nothing.
+ * Nothing here invents a connection string, and no value is ever printed.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -29,35 +28,57 @@ try {
   // No .env file, which is the normal case in a deployment.
 }
 
+/** Direct connections first; pooled ones only as a fallback. */
 const CANDIDATES = [
+  // Explicitly configured direct connections.
   "DIRECT_URL",
-  "POSTGRES_URL_NON_POOLING",
   "DATABASE_URL_UNPOOLED",
+  "POSTGRES_URL_NON_POOLING",
+  // Published by Vercel's Neon integration.
+  "STORAGE_DATABASE_URL_UNPOOLED",
+  "STORAGE_POSTGRES_URL_NON_POOLING",
+  // Pooled, as a last resort: migrating over a pooler usually works for small
+  // migrations and is better than not migrating at all.
   "DATABASE_URL",
+  "STORAGE_DATABASE_URL",
+  "STORAGE_POSTGRES_PRISMA_URL",
+  "STORAGE_POSTGRES_URL",
 ];
 
 const chosen = CANDIDATES.find((name) => (process.env[name] ?? "").trim() !== "");
 
 if (!chosen) {
+  // Report which connection-ish variables the build *can* see, by name only, so
+  // a misconfigured environment is obvious from the build log.
+  const visible = Object.keys(process.env)
+    .filter((name) => /^(DATABASE_URL|DIRECT_URL|POSTGRES_|STORAGE_)/.test(name))
+    .filter((name) => (process.env[name] ?? "").trim() !== "")
+    .sort();
+
   console.error(
     [
       "",
-      "Cannot apply database migrations: no connection string in the environment.",
+      "Cannot apply database migrations: no connection string in this environment.",
       "",
-      `Set DATABASE_URL (checked, in order: ${CANDIDATES.join(", ")}).`,
-      "On Vercel: Project Settings -> Environment Variables, for the environment",
-      "you are deploying, and make sure it is available at build time.",
+      `Looked for, in order: ${CANDIDATES.join(", ")}`,
+      "",
+      visible.length
+        ? `Variables that ARE visible here: ${visible.join(", ")}`
+        : "No database-related variables are visible here at all.",
+      "",
+      "On Vercel, an environment variable is only available to a build if it is",
+      "set for the environment being deployed (Production and Preview are",
+      "separate). Project Settings -> Environment Variables.",
       "",
     ].join("\n"),
   );
   process.exit(1);
 }
 
-if (chosen !== "DATABASE_URL") {
-  console.log(`Applying migrations over ${chosen} (direct connection).`);
-} else {
-  console.log("Applying migrations over DATABASE_URL.");
-}
+const pooled = !/UNPOOLED|NON_POOLING|DIRECT/.test(chosen);
+console.log(
+  `Applying migrations over ${chosen}${pooled ? " (pooled — a direct connection is preferred)" : " (direct connection)"}.`,
+);
 
 // Resolve the CLI from node_modules rather than trusting PATH, so this behaves
 // the same whether it is run by npm, by the platform's build, or directly.
@@ -70,10 +91,13 @@ const localBin = path.join(
 );
 const cli = existsSync(localBin) ? localBin : "prisma";
 
-const result = spawnSync(cli, ["migrate", "deploy"], {
+// Point at the schema explicitly so this does not depend on the caller's cwd.
+const schema = path.join(root, "prisma", "schema.prisma");
+
+const result = spawnSync(cli, ["migrate", "deploy", "--schema", schema], {
   stdio: "inherit",
   shell: process.platform === "win32",
-  // Only the URL is overridden; no credential is ever written down or logged.
+  // Only the URL is overridden; no credential is written down or logged.
   env: { ...process.env, DATABASE_URL: process.env[chosen] },
 });
 
